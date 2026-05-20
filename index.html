@@ -58,10 +58,23 @@ function getCentroColor(name) {
 // ── FERIADOS CHILE AUTOMÁTICOS ────────────────────────────────
 function feriadosChile(y) {
   const fer = new Set();
-  const add = (m,d) => fer.add(`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
-  add(1,1);add(5,1);add(5,21);add(6,29);add(7,16);add(8,15);
-  add(9,18);add(9,19);add(10,12);add(10,31);add(11,1);add(11,15);
-  add(12,8);add(12,25);
+  const fstr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const add = (m, d) => fer.add(fstr(new Date(y, m-1, d)));
+
+  // --- Fixed national holidays ---
+  add(1,1);   // Año Nuevo
+  add(5,1);   // Día del Trabajo
+  add(5,21);  // Glorias Navales
+  add(6,20);  // Día de los Pueblos Indígenas (solsticio; ver nota abajo)
+  add(7,16);  // Virgen del Carmen
+  add(8,15);  // Asunción
+  add(9,18);  // Independencia
+  add(9,19);  // Glorias del Ejército
+  add(11,1);  // Todos los Santos
+  add(12,8);  // Inmaculada Concepción
+  add(12,25); // Navidad
+
+  // --- Movable (Easter-based) ---
   function easter(y){
     const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4;
     const f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
@@ -70,20 +83,48 @@ function feriadosChile(y) {
     const mo=Math.floor((h+l-7*m+114)/31),dy=((h+l-7*m+114)%31)+1;
     return new Date(y,mo-1,dy);
   }
-  const ep=easter(y);
-  const fstr=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const vs=new Date(ep);vs.setDate(ep.getDate()-2);fer.add(fstr(vs));
-  const ss=new Date(ep);ss.setDate(ep.getDate()-1);fer.add(fstr(ss));
-  const cc=new Date(ep);cc.setDate(ep.getDate()+60);fer.add(fstr(cc));
-  const spDow=new Date(y,5,29).getDay();
-  if(spDow===6){const d=new Date(y,5,28);fer.add(fstr(d));}
-  else if(spDow===0){const d=new Date(y,5,30);fer.add(fstr(d));}
-  if(new Date(y,8,18).getDay()===5) add(9,20);
+  const ep = easter(y);
+  const shift = (days) => { const x = new Date(ep); x.setDate(ep.getDate()+days); fer.add(fstr(x)); };
+  shift(-2); // Viernes Santo
+  shift(-1); // Sábado Santo
+
+  // --- Ley 19.668: Jun 29 & Oct 12 ---
+  // Mar/Mié/Jue -> lunes de esa semana; Vie -> lunes siguiente; resto queda fijo
+  const trasladaLey19668 = (mes, dia) => {
+    const base = new Date(y, mes-1, dia);
+    const dow = base.getDay(); // 0=Dom..6=Sab
+    let out = base;
+    if (dow >= 2 && dow <= 4) {            // mar/mié/jue
+      out = new Date(base); out.setDate(dia - (dow - 1));   // lunes anterior
+    } else if (dow === 5) {                // viernes
+      out = new Date(base); out.setDate(dia + 3);           // lunes siguiente
+    }
+    fer.add(fstr(out));
+  };
+  trasladaLey19668(6, 29);  // San Pedro y San Pablo
+  trasladaLey19668(10, 12); // Encuentro de Dos Mundos
+
+  // --- Ley 20.299: Oct 31 (Iglesias Evangélicas) ---
+  // Martes -> viernes anterior (27); Miércoles -> viernes siguiente (2 nov); resto fijo
+  (() => {
+    const base = new Date(y, 9, 31);
+    const dow = base.getDay();
+    let out = base;
+    if (dow === 2)      { out = new Date(y, 9, 27); }   // viernes anterior
+    else if (dow === 3) { out = new Date(y, 10, 2); }   // viernes siguiente
+    fer.add(fstr(out));
+  })();
+
   return fer;
 }
-const FER_CACHE={};
-function getFer(y){if(!FER_CACHE[y])FER_CACHE[y]=feriadosChile(y);return FER_CACHE[y];}
-function esFeriado(f){const[y]=f.split('-');return getFer(+y).has(f);}
+
+const FER_CACHE = {};
+function getFer(y){ if(!FER_CACHE[y]) FER_CACHE[y] = feriadosChile(y); return FER_CACHE[y]; }
+function esFeriado(f){
+  const [yy, mm, dd] = f.split('-').map(Number);
+  const norm = `${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+  return getFer(yy).has(norm);
+}
 
 // ── FRASES MOTIVACIONALES (Loki y Kurochan) ──────────────────
 const FRASES = [
