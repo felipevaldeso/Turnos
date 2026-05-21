@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <title>TURNOS DE EXTENSIÓN</title>
+  <title>Finanzas Médicas</title>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <style>
@@ -35,6 +35,7 @@ const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywa6_7zhTrH1cM
 const DEFAULT_CENTROS   = ["P. Hevia", "Quinta Bella", "Recoleta"];
 const DEFAULT_VALOR_LV  = 15147;
 const DEFAULT_VALOR_SAB = 17706;
+const DEFAULT_FACTOR    = 0.825;
 const MONTHS    = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAYS_SHORT= ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
@@ -61,11 +62,11 @@ function feriadosChile(y) {
   const fstr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const add = (m, d) => fer.add(fstr(new Date(y, m-1, d)));
 
-  // --- Fixed national holidays ---
+  // --- Feriados fijos nacionales ---
   add(1,1);   // Año Nuevo
   add(5,1);   // Día del Trabajo
   add(5,21);  // Glorias Navales
-  add(6,20);  // Día de los Pueblos Indígenas (solsticio; ver nota abajo)
+  add(6,20);  // Día de los Pueblos Indígenas (solsticio; aprox.)
   add(7,16);  // Virgen del Carmen
   add(8,15);  // Asunción
   add(9,18);  // Independencia
@@ -74,7 +75,7 @@ function feriadosChile(y) {
   add(12,8);  // Inmaculada Concepción
   add(12,25); // Navidad
 
-  // --- Movable (Easter-based) ---
+  // --- Móviles (basados en Pascua) ---
   function easter(y){
     const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4;
     const f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
@@ -89,29 +90,27 @@ function feriadosChile(y) {
   shift(-1); // Sábado Santo
 
   // --- Ley 19.668: Jun 29 & Oct 12 ---
-  // Mar/Mié/Jue -> lunes de esa semana; Vie -> lunes siguiente; resto queda fijo
   const trasladaLey19668 = (mes, dia) => {
     const base = new Date(y, mes-1, dia);
-    const dow = base.getDay(); // 0=Dom..6=Sab
+    const dw = base.getDay();
     let out = base;
-    if (dow >= 2 && dow <= 4) {            // mar/mié/jue
-      out = new Date(base); out.setDate(dia - (dow - 1));   // lunes anterior
-    } else if (dow === 5) {                // viernes
-      out = new Date(base); out.setDate(dia + 3);           // lunes siguiente
+    if (dw >= 2 && dw <= 4) {            // mar/mié/jue -> lunes anterior
+      out = new Date(base); out.setDate(dia - (dw - 1));
+    } else if (dw === 5) {               // viernes -> lunes siguiente
+      out = new Date(base); out.setDate(dia + 3);
     }
     fer.add(fstr(out));
   };
-  trasladaLey19668(6, 29);  // San Pedro y San Pablo
-  trasladaLey19668(10, 12); // Encuentro de Dos Mundos
+  trasladaLey19668(6, 29);
+  trasladaLey19668(10, 12);
 
   // --- Ley 20.299: Oct 31 (Iglesias Evangélicas) ---
-  // Martes -> viernes anterior (27); Miércoles -> viernes siguiente (2 nov); resto fijo
   (() => {
     const base = new Date(y, 9, 31);
-    const dow = base.getDay();
+    const dw = base.getDay();
     let out = base;
-    if (dow === 2)      { out = new Date(y, 9, 27); }   // viernes anterior
-    else if (dow === 3) { out = new Date(y, 10, 2); }   // viernes siguiente
+    if (dw === 2)      { out = new Date(y, 9, 27); }   // martes -> viernes anterior
+    else if (dw === 3) { out = new Date(y, 10, 2); }   // miércoles -> viernes siguiente
     fer.add(fstr(out));
   })();
 
@@ -121,9 +120,33 @@ function feriadosChile(y) {
 const FER_CACHE = {};
 function getFer(y){ if(!FER_CACHE[y]) FER_CACHE[y] = feriadosChile(y); return FER_CACHE[y]; }
 function esFeriado(f){
-  const [yy, mm, dd] = f.split('-').map(Number);
+  const parts = String(f).split('-').map(Number);
+  if(parts.length<3 || parts.some(isNaN)) return false;
+  const [yy,mm,dd] = parts;
   const norm = `${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
   return getFer(yy).has(norm);
+}
+
+// ── LÓGICA DE TARIFAS UNIFICADA ──────────────────────────────
+// Única fuente de verdad: horas, valor/hora, tipo y total de un día.
+// Regla actual: Dom=0h. Vie y Sáb=4h. Lun–Jue=3h.
+//   - Sábado paga a tarifa especial (valorSab).
+//   - Viernes paga 4h pero a tarifa L–V (valorLV).
+function tarifaDia(dateStr, settings) {
+  const w = dateStr ? new Date(dateStr+"T12:00:00").getDay() : -1; // 0=Dom..6=Sáb
+  const esSabado = w === 6;
+  let horas = 0;
+  if (w === 0)              horas = 0;   // Domingo
+  else if (w === 5 || w === 6) horas = 4; // Viernes y Sábado
+  else                      horas = 3;   // Lun–Jue
+  const valorHora = esSabado ? settings.valorSab : settings.valorLV;
+  return {
+    horas,
+    esSabado,
+    valorHora,
+    tipo: esSabado ? "Sábado" : "Lun–Vie",
+    total: horas * valorHora,
+  };
 }
 
 // ── FRASES MOTIVACIONALES (Loki y Kurochan) ──────────────────
@@ -161,7 +184,6 @@ const FRASES = [
 ];
 
 const dow       = d => new Date(d+"T12:00:00").getDay();
-const calcHoras = d => { if(!d) return 0; const w=dow(d); if(w===0) return 0; return(w===5||w===6)?4:3; };
 const getDia    = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long"}) : "";
 const fmtCLP    = n => new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n);
 const monthKey  = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
@@ -177,8 +199,9 @@ async function apiPost(body) {
   return res.json();
 }
 
-function toSheetRow(r, mk) {
-  return { ID: r.id||genId(), Fecha: r.date, Día: r.dia, Centro: r.centro, Horas: r.horas, Tipo: dow(r.date)===6?"Sábado":"Lun–Vie", Mes: mk };
+function toSheetRow(r, mk, settings) {
+  const t = tarifaDia(r.date, settings);
+  return { ID: r.id||genId(), Fecha: r.date, Día: r.dia, Centro: r.centro, Horas: r.horas, Tipo: t.tipo, Mes: mk };
 }
 function normalizeDate(raw) {
   if(!raw) return "";
@@ -199,7 +222,7 @@ function fromSheetRow(row) {
   };
 }
 function parseSettings(raw) {
-  const defaults = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:0.825, boleta:false, centros:DEFAULT_CENTROS };
+  const defaults = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:DEFAULT_FACTOR, boleta:false, centros:DEFAULT_CENTROS };
   if(!raw || Object.keys(raw).length===0) return defaults;
   return {
     valorLV:  raw.valorLV  ? Number(raw.valorLV)  : defaults.valorLV,
@@ -211,13 +234,11 @@ function parseSettings(raw) {
 }
 
 function exportToExcel(registros, year, month, settings) {
-  const { valorLV, valorSab } = settings;
   const wb = XLSX.utils.book_new();
   const rows = [["N°","Fecha","Día","Centro","Tipo día","Horas","Valor hora","Total"]];
   registros.forEach((r,i) => {
-    const esSab = dow(r.date)===6;
-    const vh = esSab ? valorSab : valorLV;
-    rows.push([i+1, r.date.split("-").reverse().join("/"), r.dia, r.centro, esSab?"Sábado":"Lun–Vie", r.horas, vh, r.horas*vh]);
+    const t = tarifaDia(r.date, settings);
+    rows.push([i+1, r.date.split("-").reverse().join("/"), r.dia, r.centro, t.tipo, r.horas, t.valorHora, r.horas*t.valorHora]);
   });
   const ws1 = XLSX.utils.aoa_to_sheet(rows);
   ws1["!cols"] = [{wch:4},{wch:13},{wch:12},{wch:16},{wch:10},{wch:7},{wch:12},{wch:14}];
@@ -225,9 +246,9 @@ function exportToExcel(registros, year, month, settings) {
   const por = {};
   settings.centros.forEach(c => { por[c]={lv:0,sab:0}; });
   registros.forEach(r => {
-    const s=dow(r.date)===6;
+    const t = tarifaDia(r.date, settings);
     if(!por[r.centro]) por[r.centro]={lv:0,sab:0};
-    if(s) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
+    if(t.esSabado) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
   });
   let tLV=0,tSab=0;
   const rrows=[["Centro","Horas L–V","Horas Sáb","Total h","Valor L–V","Valor Sáb","Total $"]];
@@ -235,10 +256,10 @@ function exportToExcel(registros, year, month, settings) {
     const {lv,sab}=por[c]||{lv:0,sab:0};
     if(!lv&&!sab) return;
     tLV+=lv; tSab+=sab;
-    rrows.push([c,lv,sab,lv+sab,lv*valorLV,sab*valorSab,lv*valorLV+sab*valorSab]);
+    rrows.push([c,lv,sab,lv+sab,lv*settings.valorLV,sab*settings.valorSab,lv*settings.valorLV+sab*settings.valorSab]);
   });
   rrows.push([]);
-  rrows.push(["TOTAL",tLV,tSab,tLV+tSab,tLV*valorLV,tSab*valorSab,tLV*valorLV+tSab*valorSab]);
+  rrows.push(["TOTAL",tLV,tSab,tLV+tSab,tLV*settings.valorLV,tSab*settings.valorSab,tLV*settings.valorLV+tSab*settings.valorSab]);
   const ws2 = XLSX.utils.aoa_to_sheet(rrows);
   ws2["!cols"]=[{wch:16},{wch:12},{wch:12},{wch:10},{wch:13},{wch:13},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, "Resumen");
@@ -334,7 +355,8 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
       const regs = allRegistros.filter(r=>r.date&&r.date.startsWith(key));
       let lv=0, sab=0;
       regs.forEach(r=>{
-        if(dow(r.date)===6) sab+=r.horas; else lv+=r.horas;
+        const t = tarifaDia(r.date, settings);
+        if(t.esSabado) sab+=r.horas; else lv+=r.horas;
       });
       const bruto = lv*settings.valorLV + sab*settings.valorSab;
       const isActive = key===activeKey;
@@ -347,12 +369,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
   const totalAnual = monthlyData.reduce((s,d)=>s+d.bruto, 0);
   const mesesConDatos = monthlyData.filter(d=>d.hasData).length;
   const promedio = mesesConDatos>0 ? Math.round(totalAnual/mesesConDatos) : 0;
-
-  const availableYears = useMemo(()=>{
-    const years = new Set(allRegistros.map(r=>r.date.slice(0,4)));
-    years.add(String(currentYear));
-    return [...years].sort().reverse().map(Number);
-  }, [allRegistros]);
 
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
@@ -513,9 +529,14 @@ function SettingsModal({ settings, onSave, onClose }) {
   const [lv, setLv]           = useState(String(settings.valorLV));
   const [sab, setSab]         = useState(String(settings.valorSab));
   const [boleta, setBoleta]   = useState(!!settings.boleta);
-  const [factor, setFactor]   = useState(String(settings.factor||0.825));
+  const [factor, setFactor]   = useState(String(settings.factor||DEFAULT_FACTOR));
   const [centros, setCentros] = useState(settings.centros||[]);
   const [newCentro, setNewCentro] = useState("");
+
+  // Limpieza coherente: misma regla en preview y guardado.
+  const cleanInt = v => parseInt(String(v).replace(/\D/g,""),10) || 0;
+  const lvNum  = cleanInt(lv);
+  const sabNum = cleanInt(sab);
 
   function addCentro() {
     const nombre = newCentro.trim();
@@ -528,11 +549,12 @@ function SettingsModal({ settings, onSave, onClose }) {
     setCentros(prev=>prev.filter(x=>x!==c));
   }
   function handleSave() {
-    const newLV=parseInt(lv.replace(/\D/g,"")), newSab=parseInt(sab.replace(/\D/g,""));
-    const newF=parseFloat(factor);
-    if(!newLV||!newSab||centros.length===0) return;
-    if(boleta&&isNaN(newF)) return;
-    onSave({...settings, valorLV:newLV, valorSab:newSab, boleta, factor:boleta?(isNaN(newF)?0.825:newF):1, centros});
+    const newF = parseFloat(factor);
+    if(!lvNum || !sabNum || centros.length===0) return;
+    if(boleta && (isNaN(newF) || newF<=0)) return;
+    // Se preserva SIEMPRE el factor del usuario, exista o no boleta activa.
+    const factorGuardado = isNaN(newF) ? DEFAULT_FACTOR : newF;
+    onSave({...settings, valorLV:lvNum, valorSab:sabNum, boleta, factor:factorGuardado, centros});
     onClose();
   }
 
@@ -565,8 +587,8 @@ function SettingsModal({ settings, onSave, onClose }) {
         </div>
         <div style={{background:"#0f0f13",borderRadius:10,padding:"10px 14px",marginBottom:22,border:"1px solid #2a2a35"}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-            <span style={{color:"#666"}}>3h L–V → <b style={{color:"#6fcf6f"}}>{fmtCLP((parseInt(lv)||0)*3)}</b></span>
-            <span style={{color:"#666"}}>4h Sáb → <b style={{color:"#ef7070"}}>{fmtCLP((parseInt(sab)||0)*4)}</b></span>
+            <span style={{color:"#666"}}>3h L–V → <b style={{color:"#6fcf6f"}}>{fmtCLP(lvNum*3)}</b></span>
+            <span style={{color:"#666"}}>4h Sáb → <b style={{color:"#ef7070"}}>{fmtCLP(sabNum*4)}</b></span>
           </div>
         </div>
         <div style={{fontSize:11,fontWeight:700,color:"#e8c84a",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Tipo de pago</div>
@@ -653,7 +675,7 @@ function Splash({ onEnter }) {
 }
 
 function App() {
-  const defaultSettings = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:0.825, boleta:false, centros:DEFAULT_CENTROS };
+  const defaultSettings = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:DEFAULT_FACTOR, boleta:false, centros:DEFAULT_CENTROS };
   const [splashDone, setSplashDone] = useState(false);
   const [tab, setTab]           = useState("ingreso");
   const [calYear, setCalYear]   = useState(today.getFullYear());
@@ -665,6 +687,7 @@ function App() {
   const [allRegistros, setAllRegistros] = useState([]);
   const [settings, setSettings] = useState(defaultSettings);
   const [histTab, setHistTab]   = useState(null);
+  const [listaKey, setListaKey] = useState(monthKey(today.getFullYear(), today.getMonth())); // mes mostrado en pestaña Lista
   const [showSettings, setShowSettings] = useState(false);
   const [saveStatus, setSaveStatus]     = useState("sync");
   const [confirm, setConfirm]   = useState(null); // {msg, onConfirm}
@@ -707,13 +730,25 @@ function App() {
     return [...keys].filter(k=>k!==activeKey).sort().reverse();
   }, [allRegistros, activeKey]);
 
-  const horas = useMemo(()=>calcHoras(selDate),[selDate]);
+  // Meses disponibles para el selector de la pestaña Lista (incluye siempre el mes actual)
+  const listaMonths = useMemo(()=>{
+    const keys = new Set(allRegistros.map(r=>r.date.slice(0,7)));
+    keys.add(activeKey);
+    return [...keys].sort().reverse();
+  }, [allRegistros, activeKey]);
+
+  const listaRegistros = useMemo(()=>
+    allRegistros.filter(r=>r.date&&r.date.startsWith(listaKey))
+      .sort((a,b)=>a.date.localeCompare(b.date)),
+  [allRegistros, listaKey]);
+
+  const tarifaSel = useMemo(()=>tarifaDia(selDate, settings),[selDate, settings]);
+  const horas = tarifaSel.horas;
   const dia   = useMemo(()=>getDia(selDate),[selDate]);
-  const esSab = useMemo(()=>selDate?dow(selDate)===6:false,[selDate]);
+  const esSab = tarifaSel.esSabado;
 
   function toast_(msg,type="ok"){setToast({msg,type});setTimeout(()=>setToast(null),2500);}
 
-  // confirm() nativo reemplazado por modal
   function pedirConfirm(msg, cb) {
     setConfirm({ msg, onConfirm: ()=>{ setConfirm(null); cb(); } });
   }
@@ -739,8 +774,8 @@ function App() {
     setSaveStatus("saving");
 
     try {
-      await apiPost({ action:"saveRegistro", registro: toSheetRow(reg, mk) });
-      setSaveStatus("saved");
+      const res = await apiPost({ action:"saveRegistro", registro: toSheetRow(reg, mk, settings) });
+      setSaveStatus(res && res.ok===false ? "error" : "saved");
     } catch(e) { setSaveStatus("error"); }
   }
 
@@ -754,8 +789,11 @@ function App() {
       setAllRegistros(prev=>prev.filter(r=>r.id!==reg.id));
       if(editId===reg.id){ setEditId(null); setSelDate(""); }
       toast_("Eliminado");
-      try { await apiPost({ action:"deleteRegistro", id: reg.id }); }
-      catch(e) { console.error(e); }
+      setSaveStatus("saving");
+      try {
+        const res = await apiPost({ action:"deleteRegistro", id: reg.id });
+        setSaveStatus(res && res.ok===false ? "error" : "saved");
+      } catch(e) { setSaveStatus("error"); }
     });
   }
 
@@ -770,42 +808,52 @@ function App() {
       const toDelete = allRegistros.filter(r=>r.date.startsWith(key));
       setAllRegistros(prev=>prev.filter(r=>!r.date.startsWith(key)));
       if(histTab===key) setHistTab(null);
+      if(listaKey===key && key!==activeKey) setListaKey(activeKey); // no quedar en un mes vacío borrado
       toast_("Mes eliminado");
-      try { for(const r of toDelete) await apiPost({ action:"deleteRegistro", id: r.id }); }
-      catch(e) {}
+      setSaveStatus("saving");
+      let huboError = false;
+      for(const r of toDelete) {
+        try {
+          const res = await apiPost({ action:"deleteRegistro", id: r.id });
+          if(res && res.ok===false) huboError = true;
+        } catch(e) { huboError = true; }
+      }
+      setSaveStatus(huboError ? "error" : "saved");
+      if(huboError) toast_("Algunos registros no se borraron en la nube","err");
     });
   }
 
   async function handleSaveSettings(s) {
     setSettings(s);
     toast_("Configuración guardada ✓");
+    setSaveStatus("saving");
     try {
-      await apiPost({ action:"saveSettings", settings:{
+      const res = await apiPost({ action:"saveSettings", settings:{
         valorLV:s.valorLV, valorSab:s.valorSab, factor:s.factor, boleta:s.boleta,
         centros:JSON.stringify(s.centros),
       }});
-    } catch(e) {}
+      setSaveStatus(res && res.ok===false ? "error" : "saved");
+    } catch(e) { setSaveStatus("error"); }
   }
 
   function calcStats(regs) {
     const por={};
     settings.centros.forEach(c=>{por[c]={lv:0,sab:0};});
     regs.forEach(r=>{
-      const s=dow(r.date)===6;
+      const t = tarifaDia(r.date, settings);
       if(!por[r.centro]) por[r.centro]={lv:0,sab:0};
-      if(s) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
+      if(t.esSabado) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
     });
     let lv=0,sab=0;
     Object.values(por).forEach(v=>{lv+=v.lv;sab+=v.sab;});
     const bruto=lv*settings.valorLV+sab*settings.valorSab;
-    const factor=settings.boleta?(settings.factor||0.825):1;
+    const factor=settings.boleta?(settings.factor||DEFAULT_FACTOR):1;
     return{por,lv,sab,vLV:lv*settings.valorLV,vSab:sab*settings.valorSab,bruto,neto:Math.round(bruto*factor)};
   }
 
   const stats   = useMemo(()=>calcStats(registros),[registros,settings]);
-  const barData = useMemo(()=>settings.centros.map(c=>({label:c,value:(stats.por[c]?.lv||0)+(stats.por[c]?.sab||0)})).filter(d=>d.value>0),[stats]);
+  const barData = useMemo(()=>settings.centros.map(c=>({label:c,value:(stats.por[c]?.lv||0)+(stats.por[c]?.sab||0)})).filter(d=>d.value>0),[stats,settings.centros]);
 
-  const inp  = {width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px solid #2a2a35",background:"#0f0f13",fontSize:14,color:"#e8e4dc",outline:"none"};
   const lbl  = {fontSize:10,fontWeight:700,color:"#555",letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"block"};
   const btnP = on=>({width:"100%",padding:"14px 0",borderRadius:12,border:"none",
     background:on?"linear-gradient(90deg,#e8c84a,#c8a830)":"#1a1a22",
@@ -868,7 +916,7 @@ function App() {
                     {dia.charAt(0).toUpperCase()+dia.slice(1)} · {selDate.split("-").reverse().join("/")}
                   </div>
                   <div style={{fontSize:12,color:"#444",marginTop:2}}>
-                    {horas===0?"⛔ Domingo — no se registra":`⏱ ${horas}h · ${esSab?"Sáb "+fmtCLP(horas*settings.valorSab):"L–V "+fmtCLP(horas*settings.valorLV)}`}
+                    {horas===0?"⛔ Domingo — no se registra":`⏱ ${horas}h · ${esSab?"Sáb":"L–V"} ${fmtCLP(tarifaSel.total)}`}
                   </div>
                 </div>
               )}
@@ -921,32 +969,64 @@ function App() {
           </div>
         )}
 
-        {tab==="lista"&&(
+        {tab==="lista"&&(()=>{
+          const [ly,lm] = listaKey.split("-").map(Number);
+          const idxActual = listaMonths.indexOf(listaKey);
+          const lStats = calcStats(listaRegistros);
+          const esMesActual = listaKey===activeKey;
+          return (
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {registros.length>0&&(
-              <button onClick={()=>handleExport(registros,today.getFullYear(),today.getMonth())}
-                style={{width:"100%",padding:"13px 0",borderRadius:12,border:"1px solid #2d5a2d",
-                  background:"#1a3a1a",color:"#6fcf6f",fontWeight:800,fontSize:14,cursor:"pointer"}}>
-                📥 Exportar mes a Excel
-              </button>
+            {/* Selector de mes */}
+            <div className="card" style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={()=>{ if(idxActual<listaMonths.length-1) setListaKey(listaMonths[idxActual+1]); }}
+                disabled={idxActual>=listaMonths.length-1}
+                style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
+                  color:idxActual>=listaMonths.length-1?"#2a2a35":"#888",fontSize:16,
+                  cursor:idxActual>=listaMonths.length-1?"default":"pointer",flexShrink:0}}>‹</button>
+              <div style={{flex:1,textAlign:"center"}}>
+                <div style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</div>
+                <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace",marginTop:1}}>
+                  {esMesActual?"mes actual · ":""}{listaRegistros.length} días · {lStats.lv+lStats.sab}h
+                </div>
+              </div>
+              <button onClick={()=>{ if(idxActual>0) setListaKey(listaMonths[idxActual-1]); }}
+                disabled={idxActual<=0}
+                style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
+                  color:idxActual<=0?"#2a2a35":"#888",fontSize:16,
+                  cursor:idxActual<=0?"default":"pointer",flexShrink:0}}>›</button>
+            </div>
+
+            {listaRegistros.length>0&&(
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>handleExport(listaRegistros,ly,lm-1)}
+                  style={{flex:1,padding:"13px 0",borderRadius:12,border:"1px solid #2d5a2d",
+                    background:"#1a3a1a",color:"#6fcf6f",fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  📥 Exportar Excel
+                </button>
+                <button onClick={()=>deleteMonth(listaKey)}
+                  style={{padding:"13px 18px",borderRadius:12,border:"1px solid #3a1a1a",
+                    background:"#1a0a0a",color:"#ef5350",fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  🗑 Borrar mes
+                </button>
+              </div>
             )}
+
             <div className="card" style={{padding:0,overflow:"hidden"}}>
               <div style={{padding:"14px 18px",borderBottom:"1px solid #2a2a35",
                 display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[today.getMonth()]} {today.getFullYear()}</span>
+                <span style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</span>
                 <span style={{background:"#1e1e26",color:"#555",border:"1px solid #2a2a35",
                   borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
-                  {registros.length} días
+                  {listaRegistros.length} días
                 </span>
               </div>
-              {registros.length===0&&(
+              {listaRegistros.length===0&&(
                 <div style={{padding:40,textAlign:"center",color:"#2a2a35",fontSize:14}}>
-                  Sin registros este mes.<br/><span style={{fontSize:12}}>Agrega días en 📅</span>
+                  Sin registros este mes.<br/><span style={{fontSize:12}}>{esMesActual?"Agrega días en 📅":"Otro mes puede tener datos"}</span>
                 </div>
               )}
-              {registros.map((r,i)=>{
-                const s=dow(r.date)===6; const cc=getCentroColor(r.centro);
-                const vh=s?settings.valorSab:settings.valorLV;
+              {listaRegistros.map((r,i)=>{
+                const t=tarifaDia(r.date, settings); const s=t.esSabado; const cc=getCentroColor(r.centro);
                 return (
                   <div key={r.id||i} style={{display:"flex",alignItems:"center",padding:"12px 16px",
                     borderBottom:"1px solid #1e1e26",background:i%2===0?"#18181f":"#1b1b22"}}>
@@ -960,7 +1040,7 @@ function App() {
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:700,fontSize:12,color:cc.text,
                         whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.centro}</div>
-                      <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace"}}>{fmtCLP(r.horas*vh)}</div>
+                      <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace"}}>{fmtCLP(r.horas*t.valorHora)}</div>
                     </div>
                     <div style={{background:"#0f0f13",color:s?"#ef5350":"#7c7cdf",
                       borderRadius:8,padding:"4px 10px",fontWeight:800,fontSize:14,
@@ -972,7 +1052,8 @@ function App() {
               })}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {tab==="resumen"&&(
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -1117,7 +1198,7 @@ function App() {
                         ))}
                       </div>
                       {regs.map((r,i)=>{
-                        const isSab=dow(r.date)===6; const cc=getCentroColor(r.centro);
+                        const t=tarifaDia(r.date, settings); const isSab=t.esSabado; const cc=getCentroColor(r.centro);
                         return (
                           <div key={r.id||i} style={{display:"flex",alignItems:"center",padding:"9px 16px",
                             borderTop:"1px solid #1e1e26",background:i%2===0?"#18181f":"#1b1b22"}}>
