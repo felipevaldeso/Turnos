@@ -63,17 +63,20 @@ function feriadosChile(y) {
   const add = (m, d) => fer.add(fstr(new Date(y, m-1, d)));
 
   // --- Feriados fijos nacionales ---
-  add(1,1);   // Año Nuevo
-  add(5,1);   // Día del Trabajo
+  add(1,1);   // Año Nuevo (irrenunciable)
+  add(5,1);   // Día del Trabajo (irrenunciable)
   add(5,21);  // Glorias Navales
-  add(6,20);  // Día de los Pueblos Indígenas (solsticio; aprox.)
+  // Día de los Pueblos Indígenas (Ley 21.357) — solsticio de invierno
+  // Varía entre 20-21 junio. Aproximación: 21 en años normales, 20 en bisiestos después de 2044
+  const diaPueblos = (y % 4 === 0 && y > 2044) ? 20 : 21;
+  add(6, diaPueblos);
   add(7,16);  // Virgen del Carmen
-  add(8,15);  // Asunción
-  add(9,18);  // Independencia
-  add(9,19);  // Glorias del Ejército
+  add(8,15);  // Asunción de la Virgen
+  add(9,18);  // Independencia (irrenunciable)
+  add(9,19);  // Glorias del Ejército (irrenunciable)
   add(11,1);  // Todos los Santos
   add(12,8);  // Inmaculada Concepción
-  add(12,25); // Navidad
+  add(12,25); // Navidad (irrenunciable)
 
   // --- Móviles (basados en Pascua) ---
   function easter(y){
@@ -105,12 +108,14 @@ function feriadosChile(y) {
   trasladaLey19668(10, 12);
 
   // --- Ley 20.299: Oct 31 (Iglesias Evangélicas) ---
+  // Martes -> viernes semana anterior; Miércoles -> viernes misma semana (ambos = 27 oct)
   (() => {
     const base = new Date(y, 9, 31);
     const dw = base.getDay();
     let out = base;
-    if (dw === 2)      { out = new Date(y, 9, 27); }   // martes -> viernes anterior
-    else if (dw === 3) { out = new Date(y, 10, 2); }   // miércoles -> viernes siguiente
+    if (dw === 2 || dw === 3) { // martes o miércoles
+      out = new Date(y, 9, 27); // ambos van al viernes 27
+    }
     fer.add(fstr(out));
   })();
 
