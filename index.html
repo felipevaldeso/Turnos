@@ -6,7 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <title>Finanzas Médicas</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- SheetJS -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- React y ReactDOM ANTES de Babel -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<!-- Babel standalone DESPUÉS de React -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#0f0f13;font-family:'Syne',sans-serif;-webkit-tap-highlight-color:transparent;color:#e8e4dc}
@@ -24,11 +30,9 @@ select,button,input{font-family:inherit;-webkit-appearance:none}
 </head>
 <body>
 <div id="root"></div>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<script type="text/babel" data-presets="env,react">
+<!-- Script JSX al final del body, SIN data-presets="env,react" -->
+<script type="text/babel">
 const { useState, useMemo, useEffect, useCallback, useRef } = React;
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywa6_7zhTrH1cMz0OFmznvvlOM5y95n1JsZNZA0ob8mXD8G574QWfNutabgVC5peTxbw/exec";
@@ -63,21 +67,19 @@ const fer = new Set();
 const fstr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const add = (m, d) => fer.add(fstr(new Date(y, m-1, d)));
 
-// --- Feriados fijos nacionales ---
-add(1,1); // Año Nuevo (irrenunciable)
-add(5,1); // Día del Trabajo (irrenunciable)
-add(5,21); // Glorias Navales
+add(1,1);
+add(5,1);
+add(5,21);
 const diaPueblos = (y % 4 === 0 && y > 2044) ? 20 : 21;
 add(6, diaPueblos);
-add(7,16); // Virgen del Carmen
-add(8,15); // Asunción de la Virgen
-add(9,18); // Independencia (irrenunciable)
-add(9,19); // Glorias del Ejército (irrenunciable)
-add(11,1); // Todos los Santos
-add(12,8); // Inmaculada Concepción
-add(12,25); // Navidad (irrenunciable)
+add(7,16);
+add(8,15);
+add(9,18);
+add(9,19);
+add(11,1);
+add(12,8);
+add(12,25);
 
-// --- Móviles (basados en Pascua) ---
 function easter(y){
 const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4;
 const f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
@@ -88,17 +90,16 @@ return new Date(y,mo-1,dy);
 }
 const ep = easter(y);
 const shift = (days) => { const x = new Date(ep); x.setDate(ep.getDate()+days); fer.add(fstr(x)); };
-shift(-2); // Viernes Santo
-shift(-1); // Sábado Santo
+shift(-2);
+shift(-1);
 
-// --- Ley 19.668: Jun 29 & Oct 12 ---
 const trasladaLey19668 = (mes, dia) => {
 const base = new Date(y, mes-1, dia);
 const dw = base.getDay();
 let out = base;
-if (dw >= 2 && dw <= 4) { // mar/mié/jue -> lunes anterior
+if (dw >= 2 && dw <= 4) {
 out = new Date(base); out.setDate(dia - (dw - 1));
-} else if (dw === 5) { // viernes -> lunes siguiente
+} else if (dw === 5) {
 out = new Date(base); out.setDate(dia + 3);
 }
 fer.add(fstr(out));
@@ -106,13 +107,12 @@ fer.add(fstr(out));
 trasladaLey19668(6, 29);
 trasladaLey19668(10, 12);
 
-// --- Ley 20.299: Oct 31 (Iglesias Evangélicas) ---
 (() => {
 const base = new Date(y, 9, 31);
 const dw = base.getDay();
 let out = base;
-if (dw === 2 || dw === 3) { // martes o miércoles
-out = new Date(y, 9, 27); // ambos van al viernes 27
+if (dw === 2 || dw === 3) {
+out = new Date(y, 9, 27);
 }
 fer.add(fstr(out));
 })();
@@ -130,7 +130,7 @@ const norm = `${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`
 return getFer(yy).has(norm);
 }
 
-// ── LÓGICA DE TARIFAS UNIFICADA ──────────────────────────────
+// ── LÓGICA DE TARIFAS ──────────────────────────────────────────
 function tarifaDia(dateStr, settings) {
 const w = dateStr ? new Date(dateStr+"T12:00:00").getDay() : -1;
 const esSabado = w === 6;
@@ -148,7 +148,7 @@ total: horas * valorHora,
 };
 }
 
-// ── FRASES MOTIVACIONALES ──────────────────
+// ── FRASES MOTIVACIONALES ──────────────────────────────────────
 const FRASES = [
 "🐱 Loki ronronea cada vez que anotas un turno. ¡Hazlo feliz!",
 "🖤 Kurochan te mira desde las sombras. Sabe que tienes turno pendiente.",
@@ -333,7 +333,7 @@ return (
 const cc = getCentroColor(d.label);
 return (
 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-<span style={{fontSize:10,fontWeight:800,color:"#cc.dot",fontFamily:"'DM Mono',monospace"}}>{d.value||""}</span>
+<span style={{fontSize:10,fontWeight:800,color:cc.dot,fontFamily:"'DM Mono',monospace"}}>{d.value||""}</span>
 <div style={{width:"100%",borderRadius:"5px 5px 0 0",height:`${(d.value/max)*65}px`,
 minHeight:d.value?6:0,background:cc.dot,transition:"height .4s",opacity:.85}}/>
 <span style={{fontSize:9,color:"#444",textAlign:"center",lineHeight:1.2}}>{d.label.split(" ")[0]}</span>
@@ -495,7 +495,7 @@ Sin registros en {chartYear}
 );
 }
 
-// ── MODAL CONFIRMACIÓN ────
+// ── MODAL CONFIRMACIÓN ─────────────────────────────────────────
 function ConfirmModal({ msg, onConfirm, onCancel }) {
 return (
 <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:1000,
@@ -636,7 +636,7 @@ Guardar cambios
 );
 }
 
-// ── SPLASH ────────────────────────────────────────────────────
+// ── SPLASH ─────────────────────────────────────────────────────
 function Splash({ onEnter }) {
 const [gone, setGone] = useState(false);
 function enter() {
@@ -653,7 +653,7 @@ return (
 <div style={{marginTop:4,fontSize:"0.68rem",fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",
 background:"rgba(232,200,74,0.08)",border:"1px solid rgba(232,200,74,0.2)",color:"#e8c84a",
 padding:"4px 14px",borderRadius:100,fontFamily:"'DM Mono',monospace"}}>
-Loki & Kurochan ✨
+Loki &amp; Kurochan ✨
 </div>
 <button onClick={enter} style={{marginTop:22,background:"#e8c84a",color:"#0f0f13",border:"none",
 borderRadius:100,padding:"13px 36px",fontSize:"0.92rem",fontWeight:800,cursor:"pointer",
@@ -1132,7 +1132,7 @@ background:cc.dot,transition:"width .5s"}}/>
 <div className="card" style={{background:"#0a1a0a",border:"1px solid #1a3a1a"}}>
 <div style={{fontWeight:800,fontSize:13,color:"#6fcf6f",marginBottom:6}}>📊 Datos en Google Sheets</div>
 <div style={{fontSize:12,color:"#555",lineHeight:1.8}}>
-Tus registros se guardan en tu planilha. Puedes verlos en Sheets en cualquier momento.
+Tus registros se guardan en tu planilla. Puedes verlos en Sheets en cualquier momento.
 </div>
 </div>
 {historyMonths.length===0&&(
