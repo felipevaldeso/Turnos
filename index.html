@@ -27,7 +27,8 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script type="text/babel">
+
+<script type="text/babel" data-presets="env,react">
 const { useState, useMemo, useEffect, useCallback, useRef } = React;
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywa6_7zhTrH1cMz0OFmznvvlOM5y95n1JsZNZA0ob8mXD8G574QWfNutabgVC5peTxbw/exec";
@@ -66,8 +67,6 @@ function feriadosChile(y) {
   add(1,1);   // Año Nuevo (irrenunciable)
   add(5,1);   // Día del Trabajo (irrenunciable)
   add(5,21);  // Glorias Navales
-  // Día de los Pueblos Indígenas (Ley 21.357) — solsticio de invierno
-  // Varía entre 20-21 junio. Aproximación: 21 en años normales, 20 en bisiestos después de 2044
   const diaPueblos = (y % 4 === 0 && y > 2044) ? 20 : 21;
   add(6, diaPueblos);
   add(7,16);  // Virgen del Carmen
@@ -108,7 +107,6 @@ function feriadosChile(y) {
   trasladaLey19668(10, 12);
 
   // --- Ley 20.299: Oct 31 (Iglesias Evangélicas) ---
-  // Martes -> viernes semana anterior; Miércoles -> viernes misma semana (ambos = 27 oct)
   (() => {
     const base = new Date(y, 9, 31);
     const dw = base.getDay();
@@ -133,17 +131,13 @@ function esFeriado(f){
 }
 
 // ── LÓGICA DE TARIFAS UNIFICADA ──────────────────────────────
-// Única fuente de verdad: horas, valor/hora, tipo y total de un día.
-// Regla actual: Dom=0h. Vie y Sáb=4h. Lun–Jue=3h.
-//   - Sábado paga a tarifa especial (valorSab).
-//   - Viernes paga 4h pero a tarifa L–V (valorLV).
 function tarifaDia(dateStr, settings) {
-  const w = dateStr ? new Date(dateStr+"T12:00:00").getDay() : -1; // 0=Dom..6=Sáb
+  const w = dateStr ? new Date(dateStr+"T12:00:00").getDay() : -1;
   const esSabado = w === 6;
   let horas = 0;
-  if (w === 0)              horas = 0;   // Domingo
-  else if (w === 5 || w === 6) horas = 4; // Viernes y Sábado
-  else                      horas = 3;   // Lun–Jue
+  if (w === 0)              horas = 0;
+  else if (w === 5 || w === 6) horas = 4;
+  else                      horas = 3;
   const valorHora = esSabado ? settings.valorSab : settings.valorLV;
   return {
     horas,
@@ -154,7 +148,7 @@ function tarifaDia(dateStr, settings) {
   };
 }
 
-// ── FRASES MOTIVACIONALES (Loki y Kurochan) ──────────────────
+// ── FRASES MOTIVACIONALES ──────────────────
 const FRASES = [
   "🐱 Loki ronronea cada vez que anotas un turno. ¡Hazlo feliz!",
   "🖤 Kurochan te mira desde las sombras. Sabe que tienes turno pendiente.",
@@ -339,7 +333,7 @@ function BarChart({ data }) {
         const cc = getCentroColor(d.label);
         return (
           <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-            <span style={{fontSize:10,fontWeight:800,color:cc.dot,fontFamily:"'DM Mono',monospace"}}>{d.value||""}</span>
+            <span style={{fontSize:10,fontWeight:800,color:"#cc.dot",fontFamily:"'DM Mono',monospace"}}>{d.value||""}</span>
             <div style={{width:"100%",borderRadius:"5px 5px 0 0",height:`${(d.value/max)*65}px`,
               minHeight:d.value?6:0,background:cc.dot,transition:"height .4s",opacity:.85}}/>
             <span style={{fontSize:9,color:"#444",textAlign:"center",lineHeight:1.2}}>{d.label.split(" ")[0]}</span>
@@ -379,7 +373,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
 
   return (
     <div className="card" style={{padding:0,overflow:"hidden"}}>
-      {/* Header */}
       <div style={{padding:"16px 18px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
           <div style={{fontWeight:800,fontSize:13,color:"#e8e4dc"}}>📈 Ingresos anuales</div>
@@ -395,7 +388,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
                 borderRadius:8,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
           </div>
         </div>
-        {/* Totales */}
         <div style={{display:"flex",gap:8,marginBottom:16,marginTop:10}}>
           <div style={{flex:1,background:"#0f0f13",borderRadius:10,padding:"10px 12px",border:"1px solid #1e1e26"}}>
             <div style={{fontSize:8,color:"#444",fontFamily:"'DM Mono',monospace",letterSpacing:.5,marginBottom:2}}>TOTAL AÑO</div>
@@ -408,9 +400,7 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
         </div>
       </div>
 
-      {/* Gráfico de barras */}
       <div style={{padding:"0 14px 6px",position:"relative"}}>
-        {/* Línea de promedio */}
         {promedio>0&&(
           <div style={{position:"absolute",left:14,right:14,
             top:`${(1-(promedio/maxBruto))*110+8}px`,
@@ -429,7 +419,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
                 onMouseEnter={()=>d.hasData&&setHoveredIdx(i)}
                 onMouseLeave={()=>setHoveredIdx(null)}
                 onTouchStart={()=>d.hasData&&setHoveredIdx(i===hoveredIdx?null:i)}>
-                {/* Tooltip */}
                 {isHov&&(
                   <div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",
                     background:"#18181f",border:"1px solid #3a3a4a",borderRadius:10,padding:"8px 12px",
@@ -459,7 +448,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
         </div>
       </div>
 
-      {/* Leyenda */}
       <div style={{display:"flex",gap:12,padding:"10px 18px 16px",borderTop:"1px solid #1e1e26",flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <div style={{width:10,height:10,borderRadius:3,background:"#e8c84a"}}/>
@@ -477,7 +465,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
         )}
       </div>
 
-      {/* Lista compacta por mes */}
       {monthlyData.some(d=>d.hasData)&&(
         <div style={{borderTop:"1px solid #1e1e26"}}>
           {monthlyData.filter(d=>d.hasData).reverse().map((d,i)=>(
@@ -508,7 +495,7 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
   );
 }
 
-// ── MODAL CONFIRMACIÓN (bottom sheet, reemplaza confirm()) ────
+// ── MODAL CONFIRMACIÓN ────
 function ConfirmModal({ msg, onConfirm, onCancel }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:1000,
@@ -538,7 +525,6 @@ function SettingsModal({ settings, onSave, onClose }) {
   const [centros, setCentros] = useState(settings.centros||[]);
   const [newCentro, setNewCentro] = useState("");
 
-  // Limpieza coherente: misma regla en preview y guardado.
   const cleanInt = v => parseInt(String(v).replace(/\D/g,""),10) || 0;
   const lvNum  = cleanInt(lv);
   const sabNum = cleanInt(sab);
@@ -557,7 +543,6 @@ function SettingsModal({ settings, onSave, onClose }) {
     const newF = parseFloat(factor);
     if(!lvNum || !sabNum || centros.length===0) return;
     if(boleta && (isNaN(newF) || newF<=0)) return;
-    // Se preserva SIEMPRE el factor del usuario, exista o no boleta activa.
     const factorGuardado = isNaN(newF) ? DEFAULT_FACTOR : newF;
     onSave({...settings, valorLV:lvNum, valorSab:sabNum, boleta, factor:factorGuardado, centros});
     onClose();
@@ -692,10 +677,10 @@ function App() {
   const [allRegistros, setAllRegistros] = useState([]);
   const [settings, setSettings] = useState(defaultSettings);
   const [histTab, setHistTab]   = useState(null);
-  const [listaKey, setListaKey] = useState(monthKey(today.getFullYear(), today.getMonth())); // mes mostrado en pestaña Lista
+  const [listaKey, setListaKey] = useState(monthKey(today.getFullYear(), today.getMonth()));
   const [showSettings, setShowSettings] = useState(false);
   const [saveStatus, setSaveStatus]     = useState("sync");
-  const [confirm, setConfirm]   = useState(null); // {msg, onConfirm}
+  const [confirm, setConfirm]   = useState(null);
 
   const activeKey = monthKey(today.getFullYear(), today.getMonth());
 
@@ -735,7 +720,6 @@ function App() {
     return [...keys].filter(k=>k!==activeKey).sort().reverse();
   }, [allRegistros, activeKey]);
 
-  // Meses disponibles para el selector de la pestaña Lista (incluye siempre el mes actual)
   const listaMonths = useMemo(()=>{
     const keys = new Set(allRegistros.map(r=>r.date.slice(0,7)));
     keys.add(activeKey);
@@ -813,7 +797,7 @@ function App() {
       const toDelete = allRegistros.filter(r=>r.date.startsWith(key));
       setAllRegistros(prev=>prev.filter(r=>!r.date.startsWith(key)));
       if(histTab===key) setHistTab(null);
-      if(listaKey===key && key!==activeKey) setListaKey(activeKey); // no quedar en un mes vacío borrado
+      if(listaKey===key && key!==activeKey) setListaKey(activeKey);
       toast_("Mes eliminado");
       setSaveStatus("saving");
       let huboError = false;
@@ -974,14 +958,13 @@ function App() {
           </div>
         )}
 
-        {tab==="lista"&&(()=>{
+        {tab==="lista"&&(()=> {
           const [ly,lm] = listaKey.split("-").map(Number);
           const idxActual = listaMonths.indexOf(listaKey);
           const lStats = calcStats(listaRegistros);
           const esMesActual = listaKey===activeKey;
           return (
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {/* Selector de mes */}
             <div className="card" style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:8}}>
               <button onClick={()=>{ if(idxActual<listaMonths.length-1) setListaKey(listaMonths[idxActual+1]); }}
                 disabled={idxActual>=listaMonths.length-1}
@@ -1149,7 +1132,7 @@ function App() {
             <div className="card" style={{background:"#0a1a0a",border:"1px solid #1a3a1a"}}>
               <div style={{fontWeight:800,fontSize:13,color:"#6fcf6f",marginBottom:6}}>📊 Datos en Google Sheets</div>
               <div style={{fontSize:12,color:"#555",lineHeight:1.8}}>
-                Tus registros se guardan en tu planilla. Puedes verlos en Sheets en cualquier momento.
+                Tus registros se guardan en tu planilha. Puedes verlos en Sheets en cualquier momento.
               </div>
             </div>
             {historyMonths.length===0&&(
