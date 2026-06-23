@@ -24,19 +24,14 @@
 </head>
 <body>
 <div id="root"></div>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<!-- FIX: React y ReactDOM ANTES de Babel; sin registerPreset frágil -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<script>
-  Babel.registerPreset('custom-react', {
-    presets: [
-      [Babel.availablePresets['react'], { runtime: 'classic' }]
-    ]
-  });
-</script>
-
-<script type="text/babel" data-presets="custom-react">
+<!-- Script JSX: sin data-presets, type="text/babel" es suficiente -->
+<script type="text/babel">
 const { useState, useMemo, useEffect, useCallback, useRef } = React;
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywa6_7zhTrH1cMz0OFmznvvlOM5y95n1JsZNZA0ob8mXD8G574QWfNutabgVC5peTxbw/exec";
@@ -51,7 +46,7 @@ const DAYS_SHORT= ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const CENTRO_COLORS = {
   "P. Hevia":     { bg:"#1a2a1a", border:"#2d5a2d", text:"#6fcf6f", dot:"#4caf50" },
   "Quinta Bella": { bg:"#1a1a2a", border:"#2d2d5a", text:"#7c7cdf", dot:"#5c6bc0" },
-  "Recoleta":     { bg:"#2a1a1a", border:"#5a2d5a", text:"#ef7070", dot:"#ef5350" },
+  "Recoleta":     { bg:"#2a1a1a", border:"#5a2d2d", text:"#ef7070", dot:"#ef5350" },
 };
 const EXTRA_COLORS = [
   { bg:"#1a2a2a", border:"#2d5a5a", text:"#6fcfcf", dot:"#26c6da" },
@@ -65,24 +60,16 @@ function getCentroColor(name) {
   return EXTRA_COLORS[idx];
 }
 
-// ── FERIADOS CHILE AUTOMÁTICOS ────────────────────────────────
+// ── FERIADOS CHILE ────────────────────────────────────────────
 function feriadosChile(y) {
   const fer = new Set();
   const fstr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const add = (m, d) => fer.add(fstr(new Date(y, m-1, d)));
 
-  add(1,1);   // Año Nuevo
-  add(5,1);   // Día del Trabajo
-  add(5,21);  // Glorias Navales
-  const diaPueblos = (y % 4 === 0 && y > 2044) ? 20 : 21;
-  add(6, diaPueblos);
-  add(7,16);  // Virgen del Carmen
-  add(8,15);  // Asunción de la Virgen
-  add(9,18);  // Independencia
-  add(9,19);  // Glorias del Ejército
-  add(11,1);  // Todos los Santos
-  add(12,8);  // Inmaculada Concepción
-  add(12,25); // Navidad
+  add(1,1); add(5,1); add(5,21);
+  add(6, (y % 4 === 0 && y > 2044) ? 20 : 21);
+  add(7,16); add(8,15); add(9,18); add(9,19);
+  add(11,1); add(12,8); add(12,25);
 
   function easter(y){
     const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4;
@@ -93,19 +80,15 @@ function feriadosChile(y) {
     return new Date(y,mo-1,dy);
   }
   const ep = easter(y);
-  const shift = (days) => { const x = new Date(ep); x.setDate(ep.getDate()+days); fer.add(fstr(x)); };
-  shift(-2); // Viernes Santo
-  shift(-1); // Sábado Santo
+  const shift = days => { const x=new Date(ep); x.setDate(ep.getDate()+days); fer.add(fstr(x)); };
+  shift(-2); shift(-1);
 
   const trasladaLey19668 = (mes, dia) => {
     const base = new Date(y, mes-1, dia);
     const dw = base.getDay();
     let out = base;
-    if (dw >= 2 && dw <= 4) {
-      out = new Date(base); out.setDate(dia - (dw - 1));
-    } else if (dw === 5) {
-      out = new Date(base); out.setDate(dia + 3);
-    }
+    if (dw >= 2 && dw <= 4) { out = new Date(base); out.setDate(dia-(dw-1)); }
+    else if (dw === 5)      { out = new Date(base); out.setDate(dia+3); }
     fer.add(fstr(out));
   };
   trasladaLey19668(6, 29);
@@ -115,9 +98,7 @@ function feriadosChile(y) {
     const base = new Date(y, 9, 31);
     const dw = base.getDay();
     let out = base;
-    if (dw === 2 || dw === 3) {
-      out = new Date(y, 9, 27);
-    }
+    if (dw === 2 || dw === 3) out = new Date(y, 9, 27);
     fer.add(fstr(out));
   })();
 
@@ -130,29 +111,22 @@ function esFeriado(f){
   const parts = String(f).split('-').map(Number);
   if(parts.length<3 || parts.some(isNaN)) return false;
   const [yy,mm,dd] = parts;
-  const norm = `${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
-  return getFer(yy).has(norm);
+  return getFer(yy).has(`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`);
 }
 
-// ── LÓGICA DE TARIFAS UNIFICADA ──────────────────────────────
+// ── TARIFAS ───────────────────────────────────────────────────
 function tarifaDia(dateStr, settings) {
   const w = dateStr ? new Date(dateStr+"T12:00:00").getDay() : -1;
   const esSabado = w === 6;
   let horas = 0;
-  if (w === 0)              horas = 0;
+  if      (w === 0)            horas = 0;
   else if (w === 5 || w === 6) horas = 4;
-  else                      horas = 3;
+  else                         horas = 3;
   const valorHora = esSabado ? settings.valorSab : settings.valorLV;
-  return {
-    horas,
-    esSabado,
-    valorHora,
-    tipo: esSabado ? "Sábado" : "Lun–Vie",
-    total: horas * valorHora,
-  };
+  return { horas, esSabado, valorHora, tipo: esSabado?"Sábado":"Lun–Vie", total: horas*valorHora };
 }
 
-// ── FRASES MOTIVACIONALES ──────────────────
+// ── FRASES ────────────────────────────────────────────────────
 const FRASES = [
   "🐱 Loki ronronea cada vez que anotas un turno. ¡Hazlo feliz!",
   "🖤 Kurochan te mira desde las sombras. Sabe que tienes turno pendiente.",
@@ -186,25 +160,25 @@ const FRASES = [
   "💚 No hay turno pequeño. Loki y Kurochan lo saben."
 ];
 
-const dow       = d => new Date(d+"T12:00:00").getDay();
-const getDia    = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long"}) : "";
-const fmtCLP    = n => new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n);
-const monthKey  = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
-const genId     = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const today     = new Date();
+const dow      = d => new Date(d+"T12:00:00").getDay();
+const getDia   = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long"}) : "";
+const fmtCLP   = n => new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n);
+const monthKey = (y,m) => `${y}-${String(m+1).padStart(2,"0")}`;
+const genId    = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const today    = new Date();
 
 async function apiGet() {
-  const res = await fetch(APPS_SCRIPT_URL + "?action=all");
+  const res = await fetch(APPS_SCRIPT_URL+"?action=all");
   return res.json();
 }
 async function apiPost(body) {
-  const res = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify(body) });
+  const res = await fetch(APPS_SCRIPT_URL, { method:"POST", body:JSON.stringify(body) });
   return res.json();
 }
 
 function toSheetRow(r, mk, settings) {
   const t = tarifaDia(r.date, settings);
-  return { ID: r.id||genId(), Fecha: r.date, Día: r.dia, Centro: r.centro, Horas: r.horas, Tipo: t.tipo, Mes: mk };
+  return { ID:r.id||genId(), Fecha:r.date, Día:r.dia, Centro:r.centro, Horas:r.horas, Tipo:t.tipo, Mes:mk };
 }
 function normalizeDate(raw) {
   if(!raw) return "";
@@ -217,22 +191,22 @@ function normalizeDate(raw) {
 }
 function fromSheetRow(row) {
   return {
-    id:     row["ID"]     || row["id"]    || "",
-    date:   normalizeDate(row["Fecha"]   || row["fecha"] || ""),
-    dia:    row["Día"]    || row["Dia"]   || "",
-    centro: row["Centro"] || row["centro"]|| "",
+    id:     row["ID"]     || row["id"]     || "",
+    date:   normalizeDate(row["Fecha"]    || row["fecha"]  || ""),
+    dia:    row["Día"]    || row["Dia"]    || "",
+    centro: row["Centro"] || row["centro"] || "",
     horas:  Number(row["Horas"] || row["horas"] || 0),
   };
 }
 function parseSettings(raw) {
-  const defaults = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:DEFAULT_FACTOR, boleta:false, centros:DEFAULT_CENTROS };
-  if(!raw || Object.keys(raw).length===0) return defaults;
+  const def = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:DEFAULT_FACTOR, boleta:false, centros:DEFAULT_CENTROS };
+  if(!raw || Object.keys(raw).length===0) return def;
   return {
-    valorLV:  raw.valorLV  ? Number(raw.valorLV)  : defaults.valorLV,
-    valorSab: raw.valorSab ? Number(raw.valorSab) : defaults.valorSab,
-    factor:   raw.factor   ? Number(raw.factor)   : defaults.factor,
-    boleta:   raw.boleta   === "true" || raw.boleta === true,
-    centros:  raw.centros  ? (typeof raw.centros==="string" ? JSON.parse(raw.centros) : raw.centros) : defaults.centros,
+    valorLV:  raw.valorLV  ? Number(raw.valorLV)  : def.valorLV,
+    valorSab: raw.valorSab ? Number(raw.valorSab) : def.valorSab,
+    factor:   raw.factor   ? Number(raw.factor)   : def.factor,
+    boleta:   raw.boleta === "true" || raw.boleta === true,
+    centros:  raw.centros  ? (typeof raw.centros==="string" ? JSON.parse(raw.centros) : raw.centros) : def.centros,
   };
 }
 
@@ -253,7 +227,7 @@ function exportToExcel(registros, year, month, settings) {
     if(!por[r.centro]) por[r.centro]={lv:0,sab:0};
     if(t.esSabado) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
   });
-  let tLV=0,tSab=0;
+  let tLV=0, tSab=0;
   const rrows=[["Centro","Horas L–V","Horas Sáb","Total h","Valor L–V","Valor Sáb","Total $"]];
   settings.centros.forEach(c => {
     const {lv,sab}=por[c]||{lv:0,sab:0};
@@ -269,6 +243,7 @@ function exportToExcel(registros, year, month, settings) {
   XLSX.writeFile(wb, `Finanzas_${MONTHS[month]}_${year}.xlsx`);
 }
 
+// ── COMPONENTES ───────────────────────────────────────────────
 function Calendar({ year, month, marked, selected, onSelect }) {
   const first = new Date(year,month,1).getDay();
   const days  = new Date(year,month+1,0).getDate();
@@ -279,8 +254,7 @@ function Calendar({ year, month, marked, selected, onSelect }) {
     <div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:8}}>
         {DAYS_SHORT.map(d=>(
-          <div key={d} style={{textAlign:"center",fontSize:10,color:"#444",fontWeight:700,
-            fontFamily:"'DM Mono',monospace",padding:"3px 0"}}>{d}</div>
+          <div key={d} style={{textAlign:"center",fontSize:10,color:"#444",fontWeight:700,fontFamily:"'DM Mono',monospace",padding:"3px 0"}}>{d}</div>
         ))}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
@@ -289,16 +263,16 @@ function Calendar({ year, month, marked, selected, onSelect }) {
           const s=str(d), reg=marked.get(s), isSel=s===selected;
           const w=new Date(s+"T12:00:00").getDay(), isDom=w===0;
           const isFer=esFeriado(s);
-          const cc = reg ? getCentroColor(reg.centro) : null;
-          const blocked = isDom || isFer;
+          const cc=reg?getCentroColor(reg.centro):null;
+          const blocked=isDom||isFer;
           return (
             <button key={i} onClick={()=>!blocked&&onSelect(s)} style={{
-              border: isSel?"2px solid #e8c84a":reg?`2px solid ${cc.border}`:isFer?"1.5px solid #3a1a1a":"1.5px solid transparent",
+              border:isSel?"2px solid #e8c84a":reg?`2px solid ${cc.border}`:isFer?"1.5px solid #3a1a1a":"1.5px solid transparent",
               borderRadius:10, padding:"7px 0", cursor:blocked?"default":"pointer",
               fontSize:12, fontWeight:reg?800:500, fontFamily:"'DM Mono',monospace",
-              background: isSel?"#2a2510":reg?cc.bg:isFer?"#1a0a0a":w===6?"#141418":"#1e1e26",
-              color: isSel?"#e8c84a":reg?cc.text:isDom?"#2a2a2a":isFer?"#5a2a2a":w===6?"#555":"#aaa",
-              position:"relative",transition:"all .12s",
+              background:isSel?"#2a2510":reg?cc.bg:isFer?"#1a0a0a":w===6?"#141418":"#1e1e26",
+              color:isSel?"#e8c84a":reg?cc.text:isDom?"#2a2a2a":isFer?"#5a2a2a":w===6?"#555":"#aaa",
+              position:"relative", transition:"all .12s",
             }}>
               {d}
               {reg&&!isSel&&(
@@ -310,14 +284,12 @@ function Calendar({ year, month, marked, selected, onSelect }) {
         })}
       </div>
       {marked.size>0&&(
-        <div style={{marginTop:12,padding:"8px 10px",background:"#1a1a22",borderRadius:8,
-          display:"flex",flexWrap:"wrap",gap:6}}>
+        <div style={{marginTop:12,padding:"8px 10px",background:"#1a1a22",borderRadius:8,display:"flex",flexWrap:"wrap",gap:6}}>
           {[...new Set([...marked.values()].map(r=>r.centro))].map(c=>{
             const cc=getCentroColor(c);
             const n=[...marked.values()].filter(r=>r.centro===c).length;
             return(
-              <div key={c} style={{display:"flex",alignItems:"center",gap:4,
-                padding:"3px 8px",borderRadius:20,background:cc.bg,border:`1px solid ${cc.border}`}}>
+              <div key={c} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:cc.bg,border:`1px solid ${cc.border}`}}>
                 <span style={{width:6,height:6,borderRadius:"50%",background:cc.dot}}/>
                 <span style={{fontSize:10,color:cc.text,fontWeight:700}}>{c.split(" ")[0]} · {n}d</span>
               </div>
@@ -329,13 +301,12 @@ function Calendar({ year, month, marked, selected, onSelect }) {
   );
 }
 
-// CORRECCIÓN MENOR: Ajustado el literal en el color del texto para robustez
 function BarChart({ data }) {
   const max = Math.max(...data.map(d=>d.value), 1);
   return (
     <div style={{display:"flex",alignItems:"flex-end",gap:8,height:90,padding:"0 2px"}}>
       {data.map((d,i)=>{
-        const cc = getCentroColor(d.label);
+        const cc=getCentroColor(d.label);
         return (
           <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
             <span style={{fontSize:10,fontWeight:800,color:cc.dot,fontFamily:"'DM Mono',monospace"}}>{d.value||""}</span>
@@ -352,6 +323,7 @@ function BarChart({ data }) {
 function AnnualChart({ allRegistros, settings, activeKey }) {
   const currentYear = today.getFullYear();
   const [chartYear, setChartYear] = useState(currentYear);
+  const [hoveredIdx, setHoveredIdx] = useState(null);
 
   const monthlyData = useMemo(()=>{
     return MONTHS.map((name, mi)=>{
@@ -359,22 +331,19 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
       const regs = allRegistros.filter(r=>r.date&&r.date.startsWith(key));
       let lv=0, sab=0;
       regs.forEach(r=>{
-        const t = tarifaDia(r.date, settings);
+        const t=tarifaDia(r.date,settings);
         if(t.esSabado) sab+=r.horas; else lv+=r.horas;
       });
-      const bruto = lv*settings.valorLV + sab*settings.valorSab;
-      const isActive = key===activeKey;
-      const isFuture = key > activeKey;
-      return { name, key, bruto, lv, sab, isActive, isFuture, hasData: regs.length>0 };
+      const bruto=lv*settings.valorLV+sab*settings.valorSab;
+      const isActive=key===activeKey, isFuture=key>activeKey;
+      return { name, key, bruto, lv, sab, isActive, isFuture, hasData:regs.length>0 };
     });
   }, [allRegistros, chartYear, settings, activeKey]);
 
-  const maxBruto = Math.max(...monthlyData.map(d=>d.bruto), 1);
-  const totalAnual = monthlyData.reduce((s,d)=>s+d.bruto, 0);
-  const mesesConDatos = monthlyData.filter(d=>d.hasData).length;
-  const promedio = mesesConDatos>0 ? Math.round(totalAnual/mesesConDatos) : 0;
-
-  const [hoveredIdx, setHoveredIdx] = useState(null);
+  const maxBruto       = Math.max(...monthlyData.map(d=>d.bruto), 1);
+  const totalAnual     = monthlyData.reduce((s,d)=>s+d.bruto, 0);
+  const mesesConDatos  = monthlyData.filter(d=>d.hasData).length;
+  const promedio       = mesesConDatos>0 ? Math.round(totalAnual/mesesConDatos) : 0;
 
   return (
     <div className="card" style={{padding:0,overflow:"hidden"}}>
@@ -404,45 +373,37 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
           </div>
         </div>
       </div>
-
       <div style={{padding:"0 14px 6px",position:"relative"}}>
         {promedio>0&&(
-          <div style={{position:"absolute",left:14,right:14,
-            top:`${(1-(promedio/maxBruto))*110+8}px`,
-            borderTop:"1px dashed #e8c84a33",zIndex:1,pointerEvents:"none"}}>
-          </div>
+          <div style={{position:"absolute",left:14,right:14,top:`${(1-(promedio/maxBruto))*110+8}px`,
+            borderTop:"1px dashed #e8c84a33",zIndex:1,pointerEvents:"none"}}/>
         )}
         <div style={{display:"flex",alignItems:"flex-end",gap:3,height:118,paddingTop:8}}>
           {monthlyData.map((d,i)=>{
-            const pct = d.bruto>0 ? (d.bruto/maxBruto) : 0;
+            const pct  = d.bruto>0 ? (d.bruto/maxBruto) : 0;
             const barH = Math.max(pct*100, d.hasData?4:0);
-            const isHov = hoveredIdx===i;
-            const color = d.isActive ? "#e8c84a" : d.isFuture ? "#1e1e26" : d.hasData ? "#7c7cdf" : "#1a1a22";
-            const borderC = d.isActive ? "#e8c84a" : d.isFuture ? "#2a2a35" : d.hasData ? "#5c6bc0" : "transparent";
+            const isHov= hoveredIdx===i;
+            const color  = d.isActive?"#e8c84a":d.isFuture?"#1e1e26":d.hasData?"#7c7cdf":"#1a1a22";
+            const borderC= d.isActive?"#e8c84a":d.isFuture?"#2a2a35":d.hasData?"#5c6bc0":"transparent";
             return (
-              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:d.hasData?"pointer":"default",position:"relative"}}
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                cursor:d.hasData?"pointer":"default",position:"relative"}}
                 onMouseEnter={()=>d.hasData&&setHoveredIdx(i)}
                 onMouseLeave={()=>setHoveredIdx(null)}
                 onTouchStart={()=>d.hasData&&setHoveredIdx(i===hoveredIdx?null:i)}>
                 {isHov&&(
                   <div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",
                     background:"#18181f",border:"1px solid #3a3a4a",borderRadius:10,padding:"8px 12px",
-                    zIndex:10,whiteSpace:"nowrap",pointerEvents:"none",minWidth:130,
-                    marginBottom:6,boxShadow:"0 4px 20px #0009"}}>
+                    zIndex:10,whiteSpace:"nowrap",pointerEvents:"none",minWidth:130,marginBottom:6,boxShadow:"0 4px 20px #0009"}}>
                     <div style={{fontSize:11,fontWeight:800,color:"#e8e4dc",marginBottom:3}}>{d.name} {chartYear}</div>
                     <div style={{fontSize:13,fontWeight:800,color:"#e8c84a",fontFamily:"'DM Mono',monospace"}}>{fmtCLP(d.bruto)}</div>
-                    <div style={{fontSize:10,color:"#555",fontFamily:"'DM Mono',monospace",marginTop:2}}>
-                      {d.lv}h L–V · {d.sab}h Sáb
-                    </div>
+                    <div style={{fontSize:10,color:"#555",fontFamily:"'DM Mono',monospace",marginTop:2}}>{d.lv}h L–V · {d.sab}h Sáb</div>
                   </div>
                 )}
-                <div style={{width:"100%",borderRadius:"4px 4px 0 0",
-                  height:`${barH}px`,
-                  background: isHov ? (d.isActive?"#f0d060":"#9999ef") : color,
-                  border:`1px solid ${borderC}`,
-                  transition:"height .4s, background .15s",
-                  opacity: d.isFuture ? 0.3 : 1,
-                  position:"relative"}}/>
+                <div style={{width:"100%",borderRadius:"4px 4px 0 0",height:`${barH}px`,
+                  background:isHov?(d.isActive?"#f0d060":"#9999ef"):color,
+                  border:`1px solid ${borderC}`,transition:"height .4s, background .15s",
+                  opacity:d.isFuture?0.3:1}}/>
                 <span style={{fontSize:8,color:d.isActive?"#e8c84a":d.hasData?"#555":"#2a2a35",
                   fontFamily:"'DM Mono',monospace",textAlign:"center",lineHeight:1.1,fontWeight:d.isActive?800:400}}>
                   {d.name.slice(0,3)}
@@ -452,7 +413,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
           })}
         </div>
       </div>
-
       <div style={{display:"flex",gap:12,padding:"10px 18px 16px",borderTop:"1px solid #1e1e26",flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <div style={{width:10,height:10,borderRadius:3,background:"#e8c84a"}}/>
@@ -469,12 +429,11 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
           </div>
         )}
       </div>
-
-      {/* CORRECCIÓN EXPLICITA: Se colapsaron los estilos en una sola línea para evitar errores de saltos en Babel Standalone */}
       {monthlyData.some(d=>d.hasData)&&(
         <div style={{borderTop:"1px solid #1e1e26"}}>
           {monthlyData.filter(d=>d.hasData).reverse().map((d,i)=>(
-            <div key={d.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 18px",borderTop:i>0?"1px solid #1a1a22":"none",background:d.isActive?"#1a1800":"transparent"}}>
+            <div key={d.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+              padding:"9px 18px",borderTop:i>0?"1px solid #1a1a22":"none",background:d.isActive?"#1a1800":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:6,height:6,borderRadius:"50%",background:d.isActive?"#e8c84a":"#5c6bc0",flexShrink:0}}/>
                 <span style={{fontSize:12,fontWeight:d.isActive?800:500,color:d.isActive?"#e8e4dc":"#666"}}>{d.name}</span>
@@ -487,7 +446,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
           ))}
         </div>
       )}
-
       {!monthlyData.some(d=>d.hasData)&&(
         <div style={{textAlign:"center",color:"#2a2a35",fontSize:13,padding:"20px 0 24px",fontFamily:"'DM Mono',monospace"}}>
           Sin registros en {chartYear}
@@ -497,7 +455,6 @@ function AnnualChart({ allRegistros, settings, activeKey }) {
   );
 }
 
-// ── MODAL CONFIRMACIÓN ────
 function ConfirmModal({ msg, onConfirm, onCancel }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:1000,
@@ -520,44 +477,38 @@ function ConfirmModal({ msg, onConfirm, onCancel }) {
 }
 
 function SettingsModal({ settings, onSave, onClose }) {
-  const [lv, setLv]           = useState(String(settings.valorLV));
-  const [sab, setSab]         = useState(String(settings.valorSab));
-  const [boleta, setBoleta]   = useState(!!settings.boleta);
-  const [factor, setFactor]   = useState(String(settings.factor||DEFAULT_FACTOR));
-  const [centros, setCentros] = useState(settings.centros||[]);
+  const [lv,  setLv]      = useState(String(settings.valorLV));
+  const [sab, setSab]     = useState(String(settings.valorSab));
+  const [boleta, setBoleta] = useState(!!settings.boleta);
+  const [factor, setFactor] = useState(String(settings.factor||DEFAULT_FACTOR));
+  const [centros, setCentros]   = useState(settings.centros||[]);
   const [newCentro, setNewCentro] = useState("");
 
-  const cleanInt = v => parseInt(String(v).replace(/\D/g,""),10) || 0;
-  const lvNum  = cleanInt(lv);
-  const sabNum = cleanInt(sab);
+  const cleanInt = v => parseInt(String(v).replace(/\D/g,""),10)||0;
+  const lvNum = cleanInt(lv), sabNum = cleanInt(sab);
 
   function addCentro() {
-    const nombre = newCentro.trim();
-    if(!nombre || centros.includes(nombre)) return;
-    setCentros(prev=>[...prev, nombre]);
-    setNewCentro("");
+    const nombre=newCentro.trim();
+    if(!nombre||centros.includes(nombre)) return;
+    setCentros(prev=>[...prev,nombre]); setNewCentro("");
   }
-  function removeCentro(c) {
-    if(centros.length<=1) return;
-    setCentros(prev=>prev.filter(x=>x!==c));
-  }
+  function removeCentro(c) { if(centros.length<=1) return; setCentros(prev=>prev.filter(x=>x!==c)); }
   function handleSave() {
-    const newF = parseFloat(factor);
-    if(!lvNum || !sabNum || centros.length===0) return;
-    if(boleta && (isNaN(newF) || newF<=0)) return;
-    const factorGuardado = isNaN(newF) ? DEFAULT_FACTOR : newF;
-    onSave({...settings, valorLV:lvNum, valorSab:sabNum, boleta, factor:factorGuardado, centros});
+    const newF=parseFloat(factor);
+    if(!lvNum||!sabNum||centros.length===0) return;
+    if(boleta&&(isNaN(newF)||newF<=0)) return;
+    onSave({...settings, valorLV:lvNum, valorSab:sabNum, boleta, factor:isNaN(newF)?DEFAULT_FACTOR:newF, centros});
     onClose();
   }
 
-  const inp = {width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px solid #2a2a35",
+  const inp={width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px solid #2a2a35",
     background:"#0f0f13",fontSize:14,color:"#e8e4dc",outline:"none",fontFamily:"'DM Mono',monospace"};
-  const lbl = {fontSize:10,fontWeight:700,color:"#555",letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"block"};
+  const lbl={fontSize:10,fontWeight:700,color:"#555",letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"block"};
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,
       display:"flex",alignItems:"flex-end",justifyContent:"center"}}
-      onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="sheet-modal" style={{width:"100%",maxWidth:480,background:"#18181f",borderRadius:"22px 22px 0 0",
         border:"1px solid #2a2a35",padding:24,maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{width:36,height:4,background:"#2a2a35",borderRadius:100,margin:"0 auto 18px"}}/>
@@ -584,11 +535,9 @@ function SettingsModal({ settings, onSave, onClose }) {
           </div>
         </div>
         <div style={{fontSize:11,fontWeight:700,color:"#e8c84a",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Tipo de pago</div>
-        <button onClick={()=>setBoleta(b=>!b)} style={{
-          width:"100%",padding:"13px 16px",borderRadius:12,cursor:"pointer",marginBottom:boleta?12:22,
-          border:boleta?"2px solid #e8c84a":"1.5px solid #2a2a35",
-          background:boleta?"#1a1800":"#0f0f13",
-          display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button onClick={()=>setBoleta(b=>!b)} style={{width:"100%",padding:"13px 16px",borderRadius:12,cursor:"pointer",
+          marginBottom:boleta?12:22,border:boleta?"2px solid #e8c84a":"1.5px solid #2a2a35",
+          background:boleta?"#1a1800":"#0f0f13",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{textAlign:"left"}}>
             <div style={{fontWeight:800,fontSize:13,color:boleta?"#e8c84a":"#555"}}>🧾 Boleta de honorarios</div>
             <div style={{fontSize:11,color:"#444",marginTop:2}}>Aplica descuento por retención de impuesto</div>
@@ -638,14 +587,10 @@ function SettingsModal({ settings, onSave, onClose }) {
   );
 }
 
-// ── SPLASH ────────────────────────────────────────────────────
 function Splash({ onEnter }) {
   const [gone, setGone] = useState(false);
-  function enter() {
-    setGone(true);
-    setTimeout(onEnter, 480);
-  }
-  const diaAnio = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0))/86400000);
+  function enter() { setGone(true); setTimeout(onEnter, 480); }
+  const diaAnio = Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);
   const frase = FRASES[diaAnio % FRASES.length];
   return (
     <div className={`splash${gone?" gone":""}`}>
@@ -655,7 +600,8 @@ function Splash({ onEnter }) {
       <div style={{marginTop:4,fontSize:"0.68rem",fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",
         background:"rgba(232,200,74,0.08)",border:"1px solid rgba(232,200,74,0.2)",color:"#e8c84a",
         padding:"4px 14px",borderRadius:100,fontFamily:"'DM Mono',monospace"}}>
-        Loki & Kurochan ✨
+        {/* FIX: & crudo → &amp; en JSX */}
+        Loki &amp; Kurochan ✨
       </div>
       <button onClick={enter} style={{marginTop:22,background:"#e8c84a",color:"#0f0f13",border:"none",
         borderRadius:100,padding:"13px 36px",fontSize:"0.92rem",fontWeight:800,cursor:"pointer",
@@ -669,20 +615,20 @@ function Splash({ onEnter }) {
 function App() {
   const defaultSettings = { valorLV:DEFAULT_VALOR_LV, valorSab:DEFAULT_VALOR_SAB, factor:DEFAULT_FACTOR, boleta:false, centros:DEFAULT_CENTROS };
   const [splashDone, setSplashDone] = useState(false);
-  const [tab, setTab]           = useState("ingreso");
-  const [calYear, setCalYear]   = useState(today.getFullYear());
+  const [tab, setTab]         = useState("ingreso");
+  const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
-  const [selDate, setSelDate]   = useState("");
-  const [centro, setCentro]     = useState(DEFAULT_CENTROS[0]);
-  const [editId, setEditId]     = useState(null);
-  const [toast, setToast]       = useState(null);
+  const [selDate, setSelDate] = useState("");
+  const [centro, setCentro]   = useState(DEFAULT_CENTROS[0]);
+  const [editId, setEditId]   = useState(null);
+  const [toast, setToast]     = useState(null);
   const [allRegistros, setAllRegistros] = useState([]);
   const [settings, setSettings] = useState(defaultSettings);
-  const [histTab, setHistTab]   = useState(null);
+  const [histTab, setHistTab] = useState(null);
   const [listaKey, setListaKey] = useState(monthKey(today.getFullYear(), today.getMonth()));
   const [showSettings, setShowSettings] = useState(false);
   const [saveStatus, setSaveStatus]     = useState("sync");
-  const [confirm, setConfirm]   = useState(null);
+  const [confirm, setConfirm] = useState(null);
 
   const activeKey = monthKey(today.getFullYear(), today.getMonth());
 
@@ -692,8 +638,7 @@ function App() {
       try {
         const data = await apiGet();
         if(data.ok) {
-          const rawRegs = data.registros||[];
-          const regs = rawRegs.map(fromSheetRow).filter(r=>r.date);
+          const regs = (data.registros||[]).map(fromSheetRow).filter(r=>r.date);
           setAllRegistros(regs);
           if(data.settings) setSettings(parseSettings(data.settings));
           setSaveStatus("saved");
@@ -711,16 +656,14 @@ function App() {
   const marked = useMemo(()=>{
     const calKey = monthKey(calYear, calMonth);
     const m = new Map();
-    allRegistros
-      .filter(r=>r.date&&r.date.startsWith(calKey))
-      .forEach(r=>m.set(r.date, r));
+    allRegistros.filter(r=>r.date&&r.date.startsWith(calKey)).forEach(r=>m.set(r.date,r));
     return m;
   }, [allRegistros, calYear, calMonth]);
 
+  // historyMonths: solo meses distintos del mes activo, orden descendente
   const historyMonths = useMemo(()=>{
-    const keys = new Set(allAllRegistros => allRegistros.map(r=>r.date.slice(0,7)));
-    const keys2 = new Set(allRegistros.map(r=>r.date.slice(0,7)));
-    return [...keys2].filter(k=>k!==activeKey).sort().reverse();
+    const keys = new Set(allRegistros.map(r=>r.date.slice(0,7)));
+    return [...keys].filter(k=>k!==activeKey).sort().reverse();
   }, [allRegistros, activeKey]);
 
   const listaMonths = useMemo(()=>{
@@ -734,40 +677,32 @@ function App() {
       .sort((a,b)=>a.date.localeCompare(b.date)),
   [allRegistros, listaKey]);
 
-  const tarifaSel = useMemo(()=>tarifaDia(selDate, settings),[selDate, settings]);
+  const tarifaSel = useMemo(()=>tarifaDia(selDate,settings),[selDate,settings]);
   const horas = tarifaSel.horas;
   const dia   = useMemo(()=>getDia(selDate),[selDate]);
   const esSab = tarifaSel.esSabado;
 
-  function toast_(msg,type="ok"){setToast({msg,type});setTimeout(()=>setToast(null),2500);}
-
-  function pedirConfirm(msg, cb) {
-    setConfirm({ msg, onConfirm: ()=>{ setConfirm(null); cb(); } });
-  }
+  function toast_(msg,type="ok"){ setToast({msg,type}); setTimeout(()=>setToast(null),2500); }
+  function pedirConfirm(msg, cb) { setConfirm({ msg, onConfirm:()=>{ setConfirm(null); cb(); } }); }
 
   async function guardar() {
-    if(!selDate) return toast_("Elige una fecha primero","err");
-    if(dow(selDate)===0) return toast_("No hay horas los domingos","err");
-    if(esFeriado(selDate)) return toast_("Día feriado — no se registra","err");
+    if(!selDate)            return toast_("Elige una fecha primero","err");
+    if(dow(selDate)===0)    return toast_("No hay horas los domingos","err");
+    if(esFeriado(selDate))  return toast_("Día feriado — no se registra","err");
     const yaExiste = allRegistros.find(r=>r.date===selDate && r.id!==editId);
-    if(yaExiste) return toast_("Fecha ya registrada","err");
+    if(yaExiste)            return toast_("Fecha ya registrada","err");
 
-    const id = editId || genId();
+    const id  = editId || genId();
     const reg = { id, date:selDate, dia, centro, horas };
-    const mk = selDate.slice(0,7);
+    const mk  = selDate.slice(0,7);
 
-    setAllRegistros(prev=>{
-      const filtered = prev.filter(r=>r.id!==id);
-      return [...filtered, reg].sort((a,b)=>a.date.localeCompare(b.date));
-    });
-    setEditId(null);
-    setSelDate("");
+    setAllRegistros(prev=>[...prev.filter(r=>r.id!==id), reg].sort((a,b)=>a.date.localeCompare(b.date)));
+    setEditId(null); setSelDate("");
     toast_("Guardado ✓");
     setSaveStatus("saving");
-
     try {
-      const res = await apiPost({ action:"saveRegistro", registro: toSheetRow(reg, mk, settings) });
-      setSaveStatus(res && res.ok===false ? "error" : "saved");
+      const res = await apiPost({ action:"saveRegistro", registro:toSheetRow(reg,mk,settings) });
+      setSaveStatus(res&&res.ok===false?"error":"saved");
     } catch(e) { setSaveStatus("error"); }
   }
 
@@ -783,8 +718,8 @@ function App() {
       toast_("Eliminado");
       setSaveStatus("saving");
       try {
-        const res = await apiPost({ action:"deleteRegistro", id: reg.id });
-        setSaveStatus(res && res.ok===false ? "error" : "saved");
+        const res = await apiPost({ action:"deleteRegistro", id:reg.id });
+        setSaveStatus(res&&res.ok===false?"error":"saved");
       } catch(e) { setSaveStatus("error"); }
     });
   }
@@ -797,20 +732,18 @@ function App() {
   async function deleteMonth(key) {
     const [y,m]=key.split("-").map(Number);
     pedirConfirm(`¿Eliminar todos los registros de ${MONTHS[m-1]} ${y}?`, async ()=>{
-      const toDelete = allRegistros.filter(r=>r.date.startsWith(key));
+      const toDelete=allRegistros.filter(r=>r.date.startsWith(key));
       setAllRegistros(prev=>prev.filter(r=>!r.date.startsWith(key)));
       if(histTab===key) setHistTab(null);
       if(listaKey===key && key!==activeKey) setListaKey(activeKey);
       toast_("Mes eliminado");
       setSaveStatus("saving");
-      let huboError = false;
+      let huboError=false;
       for(const r of toDelete) {
-        try {
-          const res = await apiPost({ action:"deleteRegistro", id: r.id });
-          if(res && res.ok===false) huboError = true;
-        } catch(e) { huboError = true; }
+        try { const res=await apiPost({action:"deleteRegistro",id:r.id}); if(res&&res.ok===false) huboError=true; }
+        catch(e) { huboError=true; }
       }
-      setSaveStatus(huboError ? "error" : "saved");
+      setSaveStatus(huboError?"error":"saved");
       if(huboError) toast_("Algunos registros no se borraron en la nube","err");
     });
   }
@@ -824,7 +757,7 @@ function App() {
         valorLV:s.valorLV, valorSab:s.valorSab, factor:s.factor, boleta:s.boleta,
         centros:JSON.stringify(s.centros),
       }});
-      setSaveStatus(res && res.ok===false ? "error" : "saved");
+      setSaveStatus(res&&res.ok===false?"error":"saved");
     } catch(e) { setSaveStatus("error"); }
   }
 
@@ -832,7 +765,7 @@ function App() {
     const por={};
     settings.centros.forEach(c=>{por[c]={lv:0,sab:0};});
     regs.forEach(r=>{
-      const t = tarifaDia(r.date, settings);
+      const t=tarifaDia(r.date,settings);
       if(!por[r.centro]) por[r.centro]={lv:0,sab:0};
       if(t.esSabado) por[r.centro].sab+=r.horas; else por[r.centro].lv+=r.horas;
     });
@@ -844,7 +777,9 @@ function App() {
   }
 
   const stats   = useMemo(()=>calcStats(registros),[registros,settings]);
-  const barData = useMemo(()=>settings.centros.map(c=>({label:c,value:(stats.por[c]?.lv||0)+(stats.por[c]?.sab||0)})).filter(d=>d.value>0),[stats,settings.centros]);
+  const barData = useMemo(()=>settings.centros
+    .map(c=>({label:c,value:(stats.por[c]?.lv||0)+(stats.por[c]?.sab||0)}))
+    .filter(d=>d.value>0),[stats,settings.centros]);
 
   const lbl  = {fontSize:10,fontWeight:700,color:"#555",letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"block"};
   const btnP = on=>({width:"100%",padding:"14px 0",borderRadius:12,border:"none",
@@ -861,8 +796,10 @@ function App() {
           <div style={{flex:1}}>
             <div style={{fontWeight:800,fontSize:17,color:"#e8e4dc",letterSpacing:-.3}}>Finanzas Médicas</div>
             <div style={{fontSize:11,color:"#444",marginTop:1,fontFamily:"'DM Mono',monospace"}}>
-              {MONTHS[today.getMonth()]} {today.getFullYear()} · <span style={{color:saveStatus==="error"?"#ef5350":saveStatus==="saving"?"#e8c84a":saveStatus==="sync"?"#888":"#4caf50"}}>
-              {saveStatus==="error"?"⚠ sin conexión":saveStatus==="saving"?"☁️ guardando…":saveStatus==="sync"?"⏳ cargando…":"✓ sincronizado"}</span>
+              {MONTHS[today.getMonth()]} {today.getFullYear()} ·{" "}
+              <span style={{color:saveStatus==="error"?"#ef5350":saveStatus==="saving"?"#e8c84a":saveStatus==="sync"?"#888":"#4caf50"}}>
+                {saveStatus==="error"?"⚠ sin conexión":saveStatus==="saving"?"☁️ guardando…":saveStatus==="sync"?"⏳ cargando…":"✓ sincronizado"}
+              </span>
             </div>
           </div>
           <div style={{textAlign:"right",marginRight:4}}>
@@ -897,9 +834,8 @@ function App() {
                   style={{background:"none",border:"none",fontSize:22,color:"#555",cursor:"pointer",padding:"0 6px"}}>›</button>
               </div>
               <Calendar year={calYear} month={calMonth} marked={marked} selected={selDate} onSelect={s=>{
-                const reg = marked.get(s);
-                if(reg && editId===null) { editar(reg); }
-                else { setSelDate(s); }
+                const reg=marked.get(s);
+                if(reg&&editId===null){ editar(reg); } else { setSelDate(s); }
               }}/>
               {selDate&&(
                 <div style={{marginTop:14,padding:"10px 14px",background:"#0f0f13",borderRadius:10,
@@ -961,88 +897,87 @@ function App() {
           </div>
         )}
 
-        {tab==="lista"&&(()=> {
-          const [ly,lm] = listaKey.split("-").map(Number);
-          const idxActual = listaMonths.indexOf(listaKey);
-          const lStats = calcStats(listaRegistros);
-          const esMesActual = listaKey===activeKey;
+        {tab==="lista"&&(()=>{
+          const [ly,lm]=listaKey.split("-").map(Number);
+          const idxActual=listaMonths.indexOf(listaKey);
+          const lStats=calcStats(listaRegistros);
+          const esMesActual=listaKey===activeKey;
           return (
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div className="card" style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={()=>{ if(idxActual<listaMonths.length-1) setListaKey(listaMonths[idxActual+1]); }}
-                disabled={idxActual>=listaMonths.length-1}
-                style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
-                  color:idxActual>=listaMonths.length-1?"#2a2a35":"#888",fontSize:16,
-                  cursor:idxActual>=listaMonths.length-1?"default":"pointer",flexShrink:0}}>‹</button>
-              <div style={{flex:1,textAlign:"center"}}>
-                <div style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</div>
-                <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace",marginTop:1}}>
-                  {esMesActual?"mes actual · ":""}{listaRegistros.length} días · {lStats.lv+lStats.sab}h
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div className="card" style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>{if(idxActual<listaMonths.length-1)setListaKey(listaMonths[idxActual+1]);}}
+                  disabled={idxActual>=listaMonths.length-1}
+                  style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
+                    color:idxActual>=listaMonths.length-1?"#2a2a35":"#888",fontSize:16,
+                    cursor:idxActual>=listaMonths.length-1?"default":"pointer",flexShrink:0}}>‹</button>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</div>
+                  <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace",marginTop:1}}>
+                    {esMesActual?"mes actual · ":""}{listaRegistros.length} días · {lStats.lv+lStats.sab}h
+                  </div>
                 </div>
+                <button onClick={()=>{if(idxActual>0)setListaKey(listaMonths[idxActual-1]);}}
+                  disabled={idxActual<=0}
+                  style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
+                    color:idxActual<=0?"#2a2a35":"#888",fontSize:16,
+                    cursor:idxActual<=0?"default":"pointer",flexShrink:0}}>›</button>
               </div>
-              <button onClick={()=>{ if(idxActual>0) setListaKey(listaMonths[idxActual-1]); }}
-                disabled={idxActual<=0}
-                style={{background:"#1e1e26",border:"1px solid #2a2a35",borderRadius:8,width:32,height:32,
-                  color:idxActual<=0?"#2a2a35":"#888",fontSize:16,
-                  cursor:idxActual<=0?"default":"pointer",flexShrink:0}}>›</button>
-            </div>
-
-            {listaRegistros.length>0&&(
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>handleExport(listaRegistros,ly,lm-1)}
-                  style={{flex:1,padding:"13px 0",borderRadius:12,border:"1px solid #2d5a2d",
-                    background:"#1a3a1a",color:"#6fcf6f",fontWeight:800,fontSize:14,cursor:"pointer"}}>
-                  📥 Exportar Excel
-                </button>
-                <button onClick={()=>deleteMonth(listaKey)}
-                  style={{padding:"13px 18px",borderRadius:12,border:"1px solid #3a1a1a",
-                    background:"#1a0a0a",color:"#ef5350",fontWeight:800,fontSize:14,cursor:"pointer"}}>
-                  🗑 Borrar mes
-                </button>
-              </div>
-            )}
-
-            <div className="card" style={{padding:0,overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:"1px solid #2a2a35",
-                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</span>
-                <span style={{background:"#1e1e26",color:"#555",border:"1px solid #2a2a35",
-                  borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
-                  {listaRegistros.length} días
-                </span>
-              </div>
-              {listaRegistros.length===0&&(
-                <div style={{padding:40,textAlign:"center",color:"#2a2a35",fontSize:14}}>
-                  Sin registros este mes.<br/><span style={{fontSize:12}}>{esMesActual?"Agrega días en 📅":"Otro mes puede tener datos"}</span>
+              {listaRegistros.length>0&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>handleExport(listaRegistros,ly,lm-1)}
+                    style={{flex:1,padding:"13px 0",borderRadius:12,border:"1px solid #2d5a2d",
+                      background:"#1a3a1a",color:"#6fcf6f",fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                    📥 Exportar Excel
+                  </button>
+                  <button onClick={()=>deleteMonth(listaKey)}
+                    style={{padding:"13px 18px",borderRadius:12,border:"1px solid #3a1a1a",
+                      background:"#1a0a0a",color:"#ef5350",fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                    🗑 Borrar mes
+                  </button>
                 </div>
               )}
-              {listaRegistros.map((r,i)=>{
-                const t=tarifaDia(r.date, settings); const s=t.esSabado; const cc=getCentroColor(r.centro);
-                return (
-                  <div key={r.id||i} style={{display:"flex",alignItems:"center",padding:"12px 16px",
-                    borderBottom:"1px solid #1e1e26",background:i%2===0?"#18181f":"#1b1b22"}}>
-                    <div style={{width:42,height:42,borderRadius:10,marginRight:12,flexShrink:0,
-                      background:"#0f0f13",border:`1px solid ${s?"#3a1a1a":"#1a1a3a"}`,
-                      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                      <div style={{fontSize:15,fontWeight:800,color:s?"#ef5350":"#5c6bc0",
-                        lineHeight:1,fontFamily:"'DM Mono',monospace"}}>{r.date.split("-")[2]}</div>
-                      <div style={{fontSize:8,fontWeight:700,color:"#444"}}>{r.dia.slice(0,3).toUpperCase()}</div>
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:700,fontSize:12,color:cc.text,
-                        whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.centro}</div>
-                      <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace"}}>{fmtCLP(r.horas*t.valorHora)}</div>
-                    </div>
-                    <div style={{background:"#0f0f13",color:s?"#ef5350":"#7c7cdf",
-                      borderRadius:8,padding:"4px 10px",fontWeight:800,fontSize:14,
-                      marginRight:8,fontFamily:"'DM Mono',monospace"}}>{r.horas}h</div>
-                    <button onClick={()=>editar(r)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",padding:"4px",opacity:.5}}>✏️</button>
-                    <button onClick={()=>eliminar(r)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",padding:"4px",opacity:.5}}>🗑️</button>
+              <div className="card" style={{padding:0,overflow:"hidden"}}>
+                <div style={{padding:"14px 18px",borderBottom:"1px solid #2a2a35",
+                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontWeight:800,fontSize:14,color:"#e8e4dc"}}>{MONTHS[lm-1]} {ly}</span>
+                  <span style={{background:"#1e1e26",color:"#555",border:"1px solid #2a2a35",
+                    borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
+                    {listaRegistros.length} días
+                  </span>
+                </div>
+                {listaRegistros.length===0&&(
+                  <div style={{padding:40,textAlign:"center",color:"#2a2a35",fontSize:14}}>
+                    Sin registros este mes.<br/>
+                    <span style={{fontSize:12}}>{esMesActual?"Agrega días en 📅":"Otro mes puede tener datos"}</span>
                   </div>
-                );
-              })}
+                )}
+                {listaRegistros.map((r,i)=>{
+                  const t=tarifaDia(r.date,settings); const s=t.esSabado; const cc=getCentroColor(r.centro);
+                  return (
+                    <div key={r.id||i} style={{display:"flex",alignItems:"center",padding:"12px 16px",
+                      borderBottom:"1px solid #1e1e26",background:i%2===0?"#18181f":"#1b1b22"}}>
+                      <div style={{width:42,height:42,borderRadius:10,marginRight:12,flexShrink:0,
+                        background:"#0f0f13",border:`1px solid ${s?"#3a1a1a":"#1a1a3a"}`,
+                        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                        <div style={{fontSize:15,fontWeight:800,color:s?"#ef5350":"#5c6bc0",
+                          lineHeight:1,fontFamily:"'DM Mono',monospace"}}>{r.date.split("-")[2]}</div>
+                        <div style={{fontSize:8,fontWeight:700,color:"#444"}}>{r.dia.slice(0,3).toUpperCase()}</div>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:12,color:cc.text,
+                          whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.centro}</div>
+                        <div style={{fontSize:10,color:"#444",fontFamily:"'DM Mono',monospace"}}>{fmtCLP(r.horas*t.valorHora)}</div>
+                      </div>
+                      <div style={{background:"#0f0f13",color:s?"#ef5350":"#7c7cdf",
+                        borderRadius:8,padding:"4px 10px",fontWeight:800,fontSize:14,
+                        marginRight:8,fontFamily:"'DM Mono',monospace"}}>{r.horas}h</div>
+                      <button onClick={()=>editar(r)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",padding:"4px",opacity:.5}}>✏️</button>
+                      <button onClick={()=>eliminar(r)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",padding:"4px",opacity:.5}}>🗑️</button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
           );
         })()}
 
@@ -1059,9 +994,7 @@ function App() {
               <div style={{position:"absolute",top:-40,right:-40,width:140,height:140,borderRadius:"50%",
                 background:"radial-gradient(circle,#e8c84a0a,transparent 70%)"}}/>
               <div style={{fontSize:10,fontWeight:700,color:"#444",letterSpacing:1,textTransform:"uppercase",
-                marginBottom:6,fontFamily:"'DM Mono',monospace"}}>
-                {MONTHS[today.getMonth()]} {today.getFullYear()}
-              </div>
+                marginBottom:6,fontFamily:"'DM Mono',monospace"}}>{MONTHS[today.getMonth()]} {today.getFullYear()}</div>
               <div style={{fontSize:52,fontWeight:800,color:"#e8c84a",lineHeight:1,fontFamily:"'DM Mono',monospace"}}>
                 {stats.lv+stats.sab}<span style={{fontSize:22,fontWeight:400,color:"#333"}}>h</span>
               </div>
@@ -1098,7 +1031,7 @@ function App() {
                 <BarChart data={barData}/>
                 <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:10}}>
                   {settings.centros.map(c=>{
-                    const lv=stats.por[c]?.lv||0,s=stats.por[c]?.sab||0,tot=lv+s;
+                    const lv=stats.por[c]?.lv||0, s=stats.por[c]?.sab||0, tot=lv+s;
                     if(!tot) return null;
                     const mx=Math.max(...settings.centros.map(x=>(stats.por[x]?.lv||0)+(stats.por[x]?.sab||0)),1);
                     const cc=getCentroColor(c);
@@ -1110,7 +1043,7 @@ function App() {
                             {tot}h · {fmtCLP(lv*settings.valorLV+s*settings.valorSab)}
                           </span>
                         </div>
-                        <div style={{height:6,borderRadius:4,background:"#1e1e26",overflow覆:"hidden"}}>
+                                        <div style={{height:6,borderRadius:4,background:"#1e1e26",overflow:"hidden"}}>
                           <div style={{height:"100%",borderRadius:4,width:`${(tot/mx)*100}%`,
                             background:cc.dot,transition:"width .5s"}}/>
                         </div>
@@ -1179,7 +1112,9 @@ function App() {
                         </button>
                       </div>
                       <div style={{display:"flex",borderTop:"1px solid #1e1e26"}}>
-                        {[["L–V",`${s.lv}h`,fmtCLP(s.vLV)],["Sáb",`${s.sab}h`,fmtCLP(s.vSab)],[settings.boleta?"Neto":"Bruto","",fmtCLP(settings.boleta?s.neto:s.bruto)]].map(([l,h,v],i)=>(
+                        {[["L–V",`${s.lv}h`,fmtCLP(s.vLV)],["Sáb",`${s.sab}h`,fmtCLP(s.vSab)],
+                          [settings.boleta?"Neto":"Bruto","",fmtCLP(settings.boleta?s.neto:s.bruto)]
+                        ].map(([l,h,v],i)=>(
                           <div key={i} style={{flex:1,padding:"12px 8px",textAlign:"center",
                             borderRight:i<2?"1px solid #1e1e26":"none",background:i===2?"#1a1800":"#18181f"}}>
                             <div style={{fontSize:9,color:"#444",marginBottom:3,fontFamily:"'DM Mono',monospace"}}>{l}</div>
@@ -1189,7 +1124,7 @@ function App() {
                         ))}
                       </div>
                       {regs.map((r,i)=>{
-                        const t=tarifaDia(r.date, settings); const isSab=t.esSabado; const cc=getCentroColor(r.centro);
+                        const t=tarifaDia(r.date,settings); const isSab=t.esSabado; const cc=getCentroColor(r.centro);
                         return (
                           <div key={r.id||i} style={{display:"flex",alignItems:"center",padding:"9px 16px",
                             borderTop:"1px solid #1e1e26",background:i%2===0?"#18181f":"#1b1b22"}}>
